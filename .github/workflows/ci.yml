@@ -64,4 +64,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+      # A type check of the library with implicit usings off (games compile the sources into their own assembly).
       - run: dotnet build clients/godot-csharp/P2PSignaling.csproj -c Release
+      # The example compiles the sources the way a game does. Running it needs Godot and the native extension, so CI only builds it.
+      - run: dotnet build clients/godot-csharp/example/P2PSignalingExample.csproj

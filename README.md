@@ -33,6 +33,14 @@ Host game                p2p-signaling-server                 Client game
 Full message reference: [docs/protocol.md](docs/protocol.md). The client library for Godot (C#) is in
 [clients/godot-csharp](clients/godot-csharp/README.md).
 
+## Using it in a game
+
+**[docs/integration-guide.md](docs/integration-guide.md)** is the one complete guide: how to add a game to the server, add
+the library to a Godot C# game, wire the session correctly, decide what to replicate, set up export and CI, verify it, and
+fix the problems you are likely to hit. A working example is in
+[clients/godot-csharp/example](clients/godot-csharp/example/MinimalSession.cs). For coding agents working in this repository,
+see [CLAUDE.md](CLAUDE.md).
+
 ## Running it
 
 You need Go (a current 1.26.x patch release) and a MongoDB database (Atlas free tier is fine).
@@ -102,6 +110,7 @@ Defaults and ranges are in [docs/protocol.md](docs/protocol.md) and enforced by 
 ```
 go vet ./...
 go test -race ./...                                     # unit and end-to-end tests, no network needed
+go run ./cmd/devserver -bucket game                     # a local server with no database, for testing a game
 MONGODB_URI=mongodb://localhost:27017 go test -tags mongo ./internal/store/mongo   # needs a real MongoDB
 ```
 
@@ -110,6 +119,7 @@ the Mongo store tests against a MongoDB container, and a Docker build.
 
 ```
 cmd/p2p-signaling-server/   entry point: load config, run, shut down
+cmd/devserver/              in-memory local server for developing games (no database, no admin API)
 internal/
   config/      environment parsing and validation
   app/         wiring and lifecycle (graceful shutdown)
@@ -122,7 +132,8 @@ internal/
   ops/         the service layer shared by REST and MCP
   auth/ ratelimit/ netutil/ httpserver/ metrics/   building blocks
 clients/godot-csharp/       Godot 4 (C#) client library and example
-docs/                       wire protocol, CapRover deployment
+docs/                       integration guide, wire protocol, CapRover deployment
+CLAUDE.md                   guide for coding agents working in this repository
 test/e2e/                   end-to-end tests with real WebSocket clients
 ```
 

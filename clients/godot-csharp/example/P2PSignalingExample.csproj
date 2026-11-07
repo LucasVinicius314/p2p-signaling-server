@@ -6,7 +6,11 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <!-- In a real game, reference the library the same way (see the README: git submodule or copied sources). -->
-    <ProjectReference Include="..\P2PSignaling.csproj" />
+    <!--
+      Compile the library's sources INTO the game assembly, exactly as a real game does. Do not use a ProjectReference
+      to P2PSignaling.csproj: Godot only runs script classes (and their _Process) from the game's own assembly, so a
+      separately compiled P2PLobby connects to nothing and fails silently. See docs/integration-guide.md.
+    -->
+    <Compile Include="..\src\**\*.cs" />
   </ItemGroup>
 </Project>

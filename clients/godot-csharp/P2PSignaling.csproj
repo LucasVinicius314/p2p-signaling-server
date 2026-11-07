@@ -4,13 +4,17 @@
     <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Off on purpose: games compile these sources into their own assemblies, which may not have implicit usings, so every file must declare its usings. -->
+    <ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>P2PSignaling</RootNamespace>
     <AssemblyName>P2PSignaling.Godot</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
-    <!-- Not published to any package registry: games take the source (see README). -->
+    <!--
+      This project only type-checks the library in CI. Games do NOT reference it: they compile src/**/*.cs into their own assembly
+      (Godot runs script classes only from the game assembly). See docs/integration-guide.md.
+    -->
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
