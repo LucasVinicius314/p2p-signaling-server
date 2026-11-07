@@ -21,7 +21,7 @@ traffic. Each game is a **bucket** (a config document in MongoDB Atlas). The fir
 
 `cmd/p2p-signaling-server` the server. `cmd/devserver` an in-memory local server for testing games. `internal/` the server
 packages (`bucket`, `room`, `signaling`, `admin`, `mcpserver`, `store`, ...; see the README). `clients/godot-csharp/src` the
-client library (three files). `clients/godot-csharp/example` a Godot project that exercises it (`Loopback`, `MinimalSession`).
+client library (`P2PLobby`, `Protocol`, `Rtc`, and `Identity`, which holds the machine id and friends file and has no Godot types). `clients/godot-csharp/example` a Godot project that exercises it (`Loopback`, `MinimalSession`, `FriendsSession`).
 `test/e2e` end-to-end tests with real WebSocket clients.
 
 ## Commands

@@ -6,6 +6,15 @@ using Godot;
 
 namespace P2PSignaling;
 
+/// <summary>A room a friend is hosting, from <see cref="P2PLobby.ListFriendRooms"/>.</summary>
+/// <param name="Code">Pass it to <see cref="P2PLobby.JoinRoom"/>.</param>
+/// <param name="FriendLabel">The note next to the friend's id in your friends file (empty if there is none).</param>
+/// <param name="HostName">The name the host connected with (their <see cref="P2PLobby.PlayerName"/>), empty if none.</param>
+/// <param name="Players">Players in the room now, host included.</param>
+/// <param name="MaxPlayers">The room's size.</param>
+/// <param name="AgeSeconds">How long the room has existed.</param>
+public sealed record FriendRoom(string Code, string FriendLabel, string HostName, int Players, int MaxPlayers, int AgeSeconds);
+
 /// <summary>
 /// Creates or joins a room through p2p-signaling-server and sets up the WebRTC links.
 /// Add it to the scene tree, call <see cref="CreateRoom"/> or <see cref="JoinRoom"/>, and when
@@ -23,6 +32,17 @@ public partial class P2PLobby : Node
     public int MaxPlayers { get; set; }
     /// <summary>How long a WebRTC link may take to come up before <see cref="Failed"/> fires.</summary>
     public double ConnectTimeoutSeconds { get; set; } = 20;
+
+    /// <summary>
+    /// Host: also make the room visible to friends, meaning everyone who has this machine's id (<see cref="P2PIdentity.OwnId"/>)
+    /// in their friends file. They get its code through <see cref="ListFriendRooms"/>; everyone else still needs the
+    /// code from you. Off by default. Set it before <see cref="CreateRoom"/>. Needs a server that supports friend lists
+    /// (otherwise <see cref="Failed"/> reports <c>bad_message</c> and no room is created).
+    /// </summary>
+    public bool ListForFriends { get; set; }
+
+    /// <summary>Problems found in the friends file the last time <see cref="ListFriendRooms"/> read it (bad lines), empty if none.</summary>
+    public IReadOnlyList<string> FriendFileProblems { get; private set; } = Array.Empty<string>();
 
     /// <summary>True once <see cref="Connected"/> has fired.</summary>
     public bool IsLinked => _connectedRaised;
@@ -51,6 +71,8 @@ public partial class P2PLobby : Node
     public event Action<MultiplayerPeer>? PeerCreated;
     /// <summary>The multiplayer peer is ready to assign. Host: right after the room exists. Client: once the host link is up. Games using Godot's multiplayer should assign in <see cref="PeerCreated"/> instead.</summary>
     public event Action<MultiplayerPeer>? Connected;
+    /// <summary>The answer to <see cref="ListFriendRooms"/>: the rooms friends are hosting that can be joined now.</summary>
+    public event Action<IReadOnlyList<FriendRoom>>? FriendRoomsReceived;
     /// <summary>Client: waiting for the host to approve.</summary>
     public event Action? JoinPending;
     /// <summary>Host (approval mode): someone wants in; answer with <see cref="Approve"/>.</summary>
@@ -94,6 +116,7 @@ public partial class P2PLobby : Node
     private string _topology = "star";
     private Godot.Collections.Dictionary _ice = new();
     private readonly Dictionary<int, Link> _links = new();
+    private Dictionary<string, string> _friendsByTag = new();
 
     public P2PLobby() { }
 
@@ -105,7 +128,26 @@ public partial class P2PLobby : Node
     }
 
     /// <summary>Become the host. Raises <see cref="CodeReady"/> then <see cref="Connected"/>.</summary>
-    public void CreateRoom() => WhenReady(() => Send(Outgoing.CreateRoom(MaxPlayers)));
+    public void CreateRoom() =>
+        WhenReady(() => Send(Outgoing.CreateRoom(MaxPlayers, ListForFriends ? P2PIdentity.OwnTag : null)));
+
+    /// <summary>
+    /// Asks the server for the rooms your friends are hosting right now (the ids in the friends file, see
+    /// <see cref="P2PIdentity"/>) and raises <see cref="FriendRoomsReceived"/>. Join one with <see cref="JoinRoom"/> and its
+    /// <see cref="FriendRoom.Code"/>. The friends file is read again every time, so edits take effect at once.
+    /// </summary>
+    public void ListFriendRooms()
+    {
+        var list = P2PIdentity.LoadFriends();
+        FriendFileProblems = list.Problems;
+        if (list.Friends.Count == 0)
+        {
+            FriendRoomsReceived?.Invoke(Array.Empty<FriendRoom>());
+            return;
+        }
+        _friendsByTag = list.Friends.ToDictionary(f => f.Tag, f => f.Label);
+        WhenReady(() => Send(Outgoing.ListRooms(_friendsByTag.Keys)));
+    }
 
     /// <summary>Join a room by its code. Raises <see cref="Connected"/> when the host link is up.</summary>
     public void JoinRoom(string code) => WhenReady(() => Send(Outgoing.JoinRoom(code)));
@@ -250,6 +292,18 @@ public partial class P2PLobby : Node
 
             case "join_cancelled":
                 JoinCancelled?.Invoke(m.Int("peer"));
+                break;
+
+            case "room_list":
+                var rooms = new List<FriendRoom>();
+                foreach (var r in m.Objects("rooms"))
+                {
+                    var tag = r.Str("tag") ?? "";
+                    _friendsByTag.TryGetValue(tag, out var label);
+                    rooms.Add(new FriendRoom(r.Str("code") ?? "", label ?? "", r.Str("host") ?? "",
+                        r.Int("players"), r.Int("max_players"), r.Int("age_seconds")));
+                }
+                FriendRoomsReceived?.Invoke(rooms);
                 break;
 
             case "joined":

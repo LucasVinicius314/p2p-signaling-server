@@ -199,6 +199,28 @@ the session. A client whose host disappears should end the session and carry on 
 - Sends a keepalive every 30 s so the room is not closed as idle while a host is connected.
 - Times out a link that does not come up (20 s) with `Failed` / `connect_timeout`.
 
+### Friends: see your friends' rooms without a code
+
+Optional. Every machine gets an id the first time any game using the library asks for it, kept in
+`~/.p2p-signaling-server/id` (shared by all games, so a friend added once is seen in every game). Players give their id to
+friends and put friends' ids, one per line, in `~/.p2p-signaling-server/friends` (blank lines and `# notes` are ignored;
+the library creates the file with instructions). Then:
+
+```csharp
+lobby.ListForFriends = true;      // host: make my rooms visible to everyone who has my id (before CreateRoom)
+lobby.FriendRoomsReceived += rooms => { /* FriendRoom: Code, FriendLabel, HostName, Players, MaxPlayers, AgeSeconds */ };
+lobby.ListFriendRooms();          // friend: ask which of my friends are hosting; call again to refresh
+// then: lobby.JoinRoom(room.Code)
+```
+
+Show the player their own id with `P2PIdentity.OwnId` (a "copy my id" button), and warn about
+`lobby.FriendFileProblems` (a mistyped id is reported with its line number). Ids carry a checksum, so a typo is caught
+instead of silently following nobody. The id is a secret you share with friends only: anyone who has it can list your rooms,
+and the only way to take it back is to delete the `id` file (a new id) and tell your friends. The server only ever sees a
+hash of it. The folder can be moved with the environment variable `P2P_SIGNALING_HOME` (handy to run two players on one
+machine). Details and limits are in [protocol.md](protocol.md#friends-listing-rooms-to-people-who-know-you). Working
+code: [`example/FriendsSession.cs`](../clients/godot-csharp/example/FriendsSession.cs).
+
 ## 7. Decide what to replicate
 
 The library gives you a connected Godot multiplayer peer; what the game sends over it is yours. A pattern that worked
@@ -271,6 +293,8 @@ message.
 | `Failed: bucket_not_found` / `bucket_disabled` | wrong bucket id or server, or the bucket is switched off | check the id; `get_bucket` |
 | `Failed: room_not_found` | wrong code, or the room closed (the server answers the same for both) | check the code; the host may have left |
 | `Failed: room_full` / `room_locked` | the room is at `max_players`, or the host locked it | |
+| A friend's room is not in the list | the friend's id is not on a line of your `friends` file (or has a typo: see `FriendFileProblems`), they did not set `ListForFriends` before `CreateRoom`, the room is locked or full, or it is in another bucket | check the file and the flag; the list only shows joinable rooms of the bucket you are connected to |
+| `Failed: bad_message` after `CreateRoom` with `ListForFriends`, or after `ListFriendRooms` | the server is older than the friends feature | redeploy the server |
 | `Failed: rate_limited` / `locked_out` | too many joins or wrong codes from this address, or from everyone on this bucket | wait; if every player is limited together, the server is not seeing real client addresses (server operator: `TRUSTED_PROXY_CIDRS`, see [deploy-caprover.md](deploy-caprover.md)) |
 | `Failed: connect_timeout` | the direct link did not come up (a strict NAT or a firewall; only STUN is configured) | test on one network; add a TURN server to the bucket's `ice_servers` |
 | `Failed: signaling_closed` before linking | the server is unreachable, or restarted in the middle | retry |

@@ -35,7 +35,8 @@ AddChild(lobby);
 
 ### Methods
 
-`CreateRoom()`, `JoinRoom(code)`, `Approve(peerId, accept)` (host, approval mode), `SetLocked(bool)` (host), `Leave()`.
+`CreateRoom()`, `JoinRoom(code)`, `Approve(peerId, accept)` (host, approval mode), `SetLocked(bool)` (host), `Leave()`,
+`ListFriendRooms()` (see [Friends](#friends)).
 
 ### Properties
 
@@ -55,7 +56,28 @@ AddChild(lobby);
 | `JoinCancelled(id)` | host: a pending request was withdrawn or timed out |
 | `RoomClosed(reason)` | `host_left`, `idle_timeout`, `closed_by_admin`, `bucket_deleted` |
 | `SignalingLost(reason)` | the signaling connection ended after you were linked (`server_restarting` after a redeploy, or `connection_closed`). Existing links keep working, but the server forgot the room: a host should create a new one, since the old code is dead and nobody new can join |
+| `FriendRoomsReceived(rooms)` | the answer to `ListFriendRooms()`: a list of `FriendRoom` (`Code`, `FriendLabel`, `HostName`, `Players`, `MaxPlayers`, `AgeSeconds`) |
 | `Failed(code, message)` | a server error code (`room_not_found`, `locked_out`, ...) or a local one (`connect_timeout`, `webrtc_unavailable`, `signaling_closed`, `server_restarting`, `connect_failed`). What each means and how to fix it is in the guide's [troubleshooting table](../../docs/integration-guide.md#10-troubleshooting) |
+
+### Friends
+
+Optional: see friends' rooms without being sent a code. `P2PIdentity` (a static class, no Godot types) keeps this machine's id
+in `~/.p2p-signaling-server/id` and reads friends' ids, one per line, from `~/.p2p-signaling-server/friends`
+(`P2P_SIGNALING_HOME` moves the folder). What the guide's [section 6](../../docs/integration-guide.md#friends-see-your-friends-rooms-without-a-code)
+explains, as API:
+
+| Member | Meaning |
+|---|---|
+| `P2PLobby.ListForFriends` | host: also tag the room so friends can list it (set before `CreateRoom`); off by default |
+| `P2PLobby.ListFriendRooms()` | asks for the joinable rooms your friends host; answered through `FriendRoomsReceived` (an empty friends file answers at once, without a request) |
+| `P2PLobby.FriendFileProblems` | bad lines found in the friends file the last time it was read |
+| `P2PIdentity.OwnId` | this machine's id to give to friends, for example `7H3K-9QWE-...` (created on first use) |
+| `P2PIdentity.OwnTag` | its hash, which is what the server receives |
+| `P2PIdentity.LoadFriends()` | the parsed friends file (`Friend`: `Id`, `Label`, `Tag`) and its problems |
+| `P2PIdentity.TryParseId(text, out canonical)` | validates an id as typed (any case, dashes or spaces optional; the checksum catches typos) |
+| `P2PIdentity.IsPersistent` / `OwnProblem` | false and why when the id could not be saved (it then lasts for this run only) |
+
+Working code: [`example/FriendsSession.cs`](example/FriendsSession.cs).
 
 ### Behaviour worth knowing
 
@@ -72,3 +94,4 @@ AddChild(lobby);
 
 - `Loopback` (the default scene): one process hosts and joins its own room and sends a raw packet. Prints `LOOPBACK OK`.
 - `MinimalSession`: host and client as two processes, with an RPC each way. Prints `MINIMAL OK`.
+- `FriendsSession`: a host lists its room to friends, a friend finds and joins it, a stranger sees nothing. Prints `FRIENDS OK`. How to run it (it needs a `P2P_SIGNALING_HOME` per player) is at the top of the file.

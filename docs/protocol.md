@@ -22,7 +22,8 @@ The upgrade itself can be refused before any message is exchanged:
 | `t` | Fields | Meaning |
 |---|---|---|
 | `hello` | `bucket`, `game_version`, `protocol` (1), `name?` | Must be first. Selects the bucket, checks version and origin. `name` is shortened to 32 bytes and stripped of control characters. |
-| `create_room` | `max_players?` | Become host (peer id 1). |
+| `create_room` | `max_players?`, `host_tag?` | Become host (peer id 1). `host_tag` (64 lowercase hex characters, see [friends](#friends-listing-rooms-to-people-who-know-you)) makes the room visible to people who know that tag; without it the room is reachable only by its code. |
+| `list_rooms` | `tags` (up to 100, each 64 lowercase hex characters) | Ask for the joinable rooms whose host tag is one of `tags`. Answered with `room_list`. |
 | `join_room` | `code` | Join by code (case-insensitive). |
 | `approve` | `peer`, `accept` | Host only, when the bucket has `host_approval`. Both fields are required. |
 | `lock_room` | `locked` | Host only: refuse (or allow again) new joins. Required field. |
@@ -36,6 +37,7 @@ The upgrade itself can be refused before any message is exchanged:
 |---|---|---|
 | `welcome` | `ice_servers`, `ice_policy` (`all`/`relay`), `topology` (`star`/`mesh`), `limits`, `protocol` | Reply to `hello`. |
 | `room_created` | `code`, `peer_id` (always 1) | |
+| `room_list` | `rooms`: a list of `{code, tag, host?, players, max_players, age_seconds}` | Answer to `list_rooms`: oldest first, only rooms that are not locked and not full. `host` is the name the host connected with. |
 | `join_pending` | | Waiting for host approval. |
 | `join_request` | `peer`, `name?` | To the host in approval mode. No address information. |
 | `join_cancelled` | `peer` | To the host: that request was withdrawn (joiner left, or it timed out after 60 s). |
@@ -82,6 +84,25 @@ The server closes with a WebSocket close code that says why:
 - `create_room` is refused with `rate_limited` when the address already hosts `rooms_per_ip` rooms
   (0 means no limit), and with `server_busy` when the bucket is at `max_rooms`.
 - `join_denied`: the host declined, or did not answer within 60 seconds.
+
+## Friends: listing rooms to people who know you
+
+A room is normally reachable only by its code. A host can also tag its room so that friends find it without being sent
+the code:
+
+- Every machine has a random id (see the client library's `P2PIdentity`) that the player gives to friends. The **tag** is
+  the lowercase hex of `SHA256("p2p-signaling-server/friends/v1:" + canonical id)`, so the server never receives the id
+  itself.
+- A host sends its tag as `host_tag` in `create_room`. A friend sends the tags of the ids on their friends list in
+  `list_rooms` and gets back the matching rooms with their join codes. The code is then used with `join_room` as always, so
+  every limit on joining (rate limits, lockouts, host approval, locked or full rooms) still applies.
+- A tag is a capability: it is a 256-bit hash of a secret id, so it cannot be guessed, and whoever holds it can list that
+  host's rooms. Rooms without a tag are never listed. Rooms that are locked or full are left out of the answer.
+- The server never logs tags, ids or codes. `list_rooms` is limited to 60 requests per minute per address
+  (`rate_limited`, the connection stays open) and 100 tags per request (`bad_message`). It works in any bucket and needs
+  no setting.
+- Old servers do not know these messages and answer `bad_message`; the field and message are additive, so protocol 1 is
+  unchanged and old clients are not affected.
 
 ## Idle rooms
 

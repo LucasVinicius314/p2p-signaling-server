@@ -40,6 +40,12 @@ type hello struct {
 type createRoom struct {
 	T          string `json:"t"`
 	MaxPlayers int    `json:"max_players"`
+	HostTag    string `json:"host_tag"` // optional friends tag, see docs/protocol.md
+}
+
+type listRooms struct {
+	T    string   `json:"t"`
+	Tags []string `json:"tags"`
 }
 
 type joinRoom struct {
@@ -84,6 +90,20 @@ type welcomeLims struct {
 	MessageBytes      int `json:"message_bytes"`
 	MessagesPerSecond int `json:"messages_per_second"`
 	MaxPlayers        int `json:"max_players"`
+}
+
+type roomEntry struct {
+	Code       string `json:"code"`
+	Tag        string `json:"tag"`
+	Host       string `json:"host,omitempty"`
+	Players    int    `json:"players"`
+	MaxPlayers int    `json:"max_players"`
+	AgeSeconds int    `json:"age_seconds"`
+}
+
+type roomList struct {
+	T     string      `json:"t"`
+	Rooms []roomEntry `json:"rooms"`
 }
 
 type roomCreated struct {
@@ -157,6 +177,8 @@ func decode(raw []byte) (t string, msg any, err error) {
 		msg = &hello{}
 	case "create_room":
 		msg = &createRoom{}
+	case "list_rooms":
+		msg = &listRooms{}
 	case "join_room":
 		msg = &joinRoom{}
 	case "signal":

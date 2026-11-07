@@ -71,6 +71,7 @@ type Handler struct {
 	once     sync.Once
 	connects *ratelimit.Limiter
 	joins    *ratelimit.Limiter
+	lists    *ratelimit.Limiter // room list requests per address
 	failures *ratelimit.Limiter // wrong codes per bucket, all addresses together
 	lockouts *ratelimit.Lockout
 
@@ -102,6 +103,7 @@ func (h *Handler) init() {
 			h.MaxConns = defaultMaxConns
 		}
 		h.connects, h.joins, h.failures = ratelimit.NewLimiter(), ratelimit.NewLimiter(), ratelimit.NewLimiter()
+		h.lists = ratelimit.NewLimiter()
 		h.lockouts = ratelimit.NewLockout()
 		h.conns, h.perKey = map[*conn]struct{}{}, map[string]int{}
 	})
@@ -442,6 +444,8 @@ func (h *Handler) readLoop(c *conn, p *room.Peer, b bucket.Bucket) {
 		switch m := msg.(type) {
 		case *createRoom:
 			h.create(c, p, b, m)
+		case *listRooms:
+			h.list(c, b, m)
 		case *joinRoom:
 			if h.join(c, p, b, m) {
 				// Too many wrong codes on this connection: say so, then drop it.
@@ -476,10 +480,14 @@ func (h *Handler) create(c *conn, p *room.Peer, b bucket.Bucket, m *createRoom) 
 		}
 		maxPlayers = m.MaxPlayers
 	}
+	if m.HostTag != "" && !validTag(m.HostTag) {
+		c.send(newError(ErrBadMessage, "host_tag must be 64 lowercase hex characters"))
+		return
+	}
 	p.Name = c.name
 	r, err := h.Rooms.Create(b.ID, room.Params{
 		Topology: b.Topology, MaxPlayers: maxPlayers, MaxRooms: b.MaxRooms,
-		CodeLength: b.CodeLength, RoomsPerIP: b.Limits.RoomsPerIP,
+		CodeLength: b.CodeLength, RoomsPerIP: b.Limits.RoomsPerIP, Tag: m.HostTag,
 	}, p)
 	switch {
 	case errors.Is(err, room.ErrBusy):
@@ -495,6 +503,54 @@ func (h *Handler) create(c *conn, p *room.Peer, b bucket.Bucket, m *createRoom) 
 		h.log().Info("room created", "bucket", b.ID, "topology", b.Topology)
 		c.send(roomCreated{"room_created", r.Code, p.ID})
 	}
+}
+
+// listsPerMinute caps list_rooms requests per address. A game asks when its lobby screen opens or refreshes.
+const listsPerMinute = 60
+
+// maxListTags caps the friends tags in one list_rooms (64 hex characters each, so the request stays well within
+// the default 16 KiB message limit).
+const maxListTags = 100
+
+// validTag reports whether s looks like a friends tag: the lowercase hex of a SHA-256.
+func validTag(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// list handles list_rooms: the joinable rooms whose host's friends tag the asker knows. A tag is a capability, the
+// hash of an id its owner shared, so nothing is revealed to someone who does not already hold it, and tags are
+// 256 bits, so they cannot be guessed.
+func (h *Handler) list(c *conn, b bucket.Bucket, m *listRooms) {
+	if len(m.Tags) > maxListTags {
+		c.send(newError(ErrBadMessage, "too many tags"))
+		return
+	}
+	tags := make(map[string]struct{}, len(m.Tags))
+	for _, t := range m.Tags {
+		if !validTag(t) {
+			c.send(newError(ErrBadMessage, "tags must be 64 lowercase hex characters"))
+			return
+		}
+		tags[t] = struct{}{}
+	}
+	if !h.lists.Allow(b.ID+"|"+c.key, listsPerMinute) {
+		h.Metrics.RateLimited()
+		c.send(newError(ErrRateLimited, "too many list requests"))
+		return
+	}
+	out := roomList{T: "room_list", Rooms: []roomEntry{}}
+	for _, l := range h.Rooms.Listed(b.ID, tags) {
+		out.Rooms = append(out.Rooms, roomEntry{l.Code, l.Tag, l.HostName, l.Players, l.Max, int(l.Age.Seconds())})
+	}
+	c.send(out)
 }
 
 // join handles join_room. It reports true when the connection must be dropped for guessing codes.

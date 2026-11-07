@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"net/netip"
+	"sort"
 	"sync"
 	"time"
 
@@ -55,6 +56,10 @@ type Params struct {
 	MaxRooms   int // per bucket
 	CodeLength int
 	RoomsPerIP int // live rooms one address (an IPv6 /64 counts as one) may host in this bucket; 0 = unlimited
+
+	// Tag is the host's friends tag (lowercase hex of a SHA-256, see docs/protocol.md): the room is listed to
+	// anyone who asks for that tag. Empty means the room is reachable only by its code.
+	Tag string
 }
 
 type Room struct {
@@ -63,6 +68,7 @@ type Room struct {
 	Topology string
 	Max      int
 	Created  time.Time
+	Tag      string
 
 	host       *Peer
 	peers      map[int32]*Peer // admitted members, including the host
@@ -121,7 +127,7 @@ func (m *Manager) Create(bucketID string, p Params, host *Peer) (*Room, error) {
 	host.ID = HostID
 	now := m.now()
 	r := &Room{
-		Bucket: bucketID, Code: code, Topology: p.Topology, Max: p.MaxPlayers, Created: now,
+		Bucket: bucketID, Code: code, Topology: p.Topology, Max: p.MaxPlayers, Created: now, Tag: p.Tag,
 		host: host, peers: map[int32]*Peer{HostID: host}, pending: map[int32]*Peer{}, lastActive: now,
 	}
 	host.room = r
@@ -382,6 +388,36 @@ func (m *Manager) List(bucketID string) []Info {
 			out = append(out, Info{b, r.Code, len(r.peers), m.now().Sub(r.Created).Seconds()})
 		}
 	}
+	return out
+}
+
+// Listing is what a friend sees of a room: enough to pick it and join it.
+type Listing struct {
+	Code     string
+	Tag      string
+	HostName string
+	Players  int
+	Max      int
+	Age      time.Duration
+}
+
+// Listed returns the joinable rooms of a bucket whose tag is in tags, oldest first. Rooms that are locked or full
+// are left out, since a friend could not join them anyway.
+func (m *Manager) Listed(bucketID string, tags map[string]struct{}) []Listing {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := m.now()
+	var out []Listing
+	for _, r := range m.rooms[bucketID] {
+		if r.Tag == "" || r.locked || len(r.peers)+len(r.pending) >= r.Max {
+			continue
+		}
+		if _, ok := tags[r.Tag]; !ok {
+			continue
+		}
+		out = append(out, Listing{r.Code, r.Tag, r.host.Name, len(r.peers), r.Max, now.Sub(r.Created)})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Age > out[j].Age })
 	return out
 }
 

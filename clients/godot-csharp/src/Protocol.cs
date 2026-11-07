@@ -40,6 +40,16 @@ internal readonly struct ServerMessage
     public JsonElement? Raw(string name) =>
         _root.TryGetProperty(name, out var v) ? v : null;
 
+    /// <summary>The elements of an array field that are objects (each parsed as a message of its own).</summary>
+    public List<ServerMessage> Objects(string name)
+    {
+        var list = new List<ServerMessage>();
+        if (!_root.TryGetProperty(name, out var v) || v.ValueKind != JsonValueKind.Array) return list;
+        foreach (var e in v.EnumerateArray())
+            if (e.ValueKind == JsonValueKind.Object) list.Add(new ServerMessage(e));
+        return list;
+    }
+
     public int[] IntArray(string name)
     {
         if (!_root.TryGetProperty(name, out var v) || v.ValueKind != JsonValueKind.Array) return Array.Empty<int>();
@@ -62,12 +72,15 @@ internal static class Outgoing
         return Json(m);
     }
 
-    public static string CreateRoom(int maxPlayers)
+    public static string CreateRoom(int maxPlayers, string? hostTag = null)
     {
         var m = new Dictionary<string, object?> { ["t"] = "create_room" };
         if (maxPlayers > 0) m["max_players"] = maxPlayers;
+        if (!string.IsNullOrEmpty(hostTag)) m["host_tag"] = hostTag;
         return Json(m);
     }
+
+    public static string ListRooms(IEnumerable<string> tags) => Json(new() { ["t"] = "list_rooms", ["tags"] = tags.ToArray() });
 
     public static string JoinRoom(string code) => Json(new() { ["t"] = "join_room", ["code"] = code });
     public static string Approve(int peer, bool accept) => Json(new() { ["t"] = "approve", ["peer"] = peer, ["accept"] = accept });
