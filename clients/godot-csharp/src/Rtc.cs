@@ -20,7 +20,13 @@ internal static class Rtc
     public static Error CreateClient(MultiplayerPeer p, int id) => Err(p.Call("create_client", id));
     public static Error CreateMesh(MultiplayerPeer p, int id) => Err(p.Call("create_mesh", id));
     public static Error AddPeer(MultiplayerPeer p, GodotObject conn, int id) => Err(p.Call("add_peer", conn, id));
-    public static void RemovePeer(MultiplayerPeer p, int id) => p.Call("remove_peer", id);
+    // The peer may already be gone (its data channels closed before the server's peer_left arrived); removing it
+    // again would log an engine error.
+    public static void RemovePeer(MultiplayerPeer p, int id)
+    {
+        if (p.Call("has_peer", id).AsBool())
+            p.Call("remove_peer", id);
+    }
 
     public static Error Initialize(GodotObject c, Godot.Collections.Dictionary config) => Err(c.Call("initialize", config));
     public static Error CreateOffer(GodotObject c) => Err(c.Call("create_offer"));

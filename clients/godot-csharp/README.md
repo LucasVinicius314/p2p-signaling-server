@@ -59,7 +59,7 @@ public partial class Lobby : Node
         _lobby = new P2PLobby("https://p2p.example.com", "my-game", "1.0.0") { PlayerName = "Player" };
         AddChild(_lobby);                       // it must be in the scene tree
 
-        _lobby.Connected += peer => Multiplayer.MultiplayerPeer = peer;   // do this right away
+        _lobby.PeerCreated += peer => Multiplayer.MultiplayerPeer = peer;   // do this right away, see Notes
         _lobby.CodeReady += code => GD.Print($"Share this code: {code}");
         _lobby.Failed += (code, message) => GD.PrintErr($"{code}: {message}");
         _lobby.RoomClosed += reason => GD.Print($"Room closed: {reason}");
@@ -70,14 +70,16 @@ public partial class Lobby : Node
 }
 ```
 
-After `Connected` the game is ordinary Godot multiplayer. The host is peer id 1.
+After `PeerCreated` the game is ordinary Godot multiplayer (use RPCs once the other side connects; `Multiplayer.ConnectedToServer`
+fires on a client when the host link is up). The host is peer id 1.
 
 ### Events
 
 | Event | When |
 |---|---|
 | `CodeReady(code)` | host: the room exists, show this code |
-| `Connected(peer)` | assign `peer` to `Multiplayer.MultiplayerPeer`. Host: right after the room exists. Client: when the link to the host is up |
+| `PeerCreated(peer)` | **assign `peer` to `Multiplayer.MultiplayerPeer` here** if you use Godot's multiplayer (RPCs). It fires before any link is up, which is what the multiplayer layer needs: a peer assigned after it connected is never registered and its packets are dropped |
+| `Connected(peer)` | the peer is linked. Host: right after the room exists. Client: when the link to the host is up. Fine for raw packets (`PutPacket`/`GetPacket`); for RPCs assign in `PeerCreated` instead |
 | `PeerConnected(id)` / `PeerDisconnected(id)` | a peer's data channels opened or closed |
 | `JoinPending()` | client: waiting for the host's approval |
 | `JoinRequest(id, name)` | host, in approval mode: answer with `Approve(id, true/false)` |
@@ -90,8 +92,9 @@ Other methods and properties: `SetLocked(bool)` (host), `Leave()`, `HasSignaling
 
 ### Notes
 
-- **Assign the peer in the `Connected` handler.** Until a peer is assigned to `Multiplayer`, the
-  lobby polls it itself; after that Godot does.
+- **Assign the peer in the `PeerCreated` handler** (not later). Until a peer is assigned to `Multiplayer`, the
+  lobby polls it itself; after that Godot does. Assigning after the peer connected leaves Godot unaware of it and
+  its RPCs are dropped with `!connected_peers.has(sender)` errors.
 - The signaling socket stays open after connecting and sends a keepalive every 30 s, which keeps the
   room joinable for latecomers (the server closes rooms with no activity for the bucket's
   `room_idle_timeout_seconds`). Call `Leave()` when the game session ends.

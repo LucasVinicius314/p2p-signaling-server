@@ -39,7 +39,14 @@ public partial class P2PLobby : Node
 
     /// <summary>Host: the room exists and this is its join code.</summary>
     public event Action<string>? CodeReady;
-    /// <summary>The multiplayer peer is ready to assign. Host: right after the room exists. Client: once the host link is up.</summary>
+    /// <summary>
+    /// The multiplayer peer was just created and no link is up yet. Assign it to <c>Multiplayer.MultiplayerPeer</c>
+    /// here if the game uses Godot's multiplayer (RPCs, spawners): the multiplayer layer must be attached before a peer
+    /// connects, or it never learns about that peer and drops its packets. Host: right after the room exists.
+    /// Client: right after the server admitted you.
+    /// </summary>
+    public event Action<MultiplayerPeer>? PeerCreated;
+    /// <summary>The multiplayer peer is ready to assign. Host: right after the room exists. Client: once the host link is up. Games using Godot's multiplayer should assign in <see cref="PeerCreated"/> instead.</summary>
     public event Action<MultiplayerPeer>? Connected;
     /// <summary>Client: waiting for the host to approve.</summary>
     public event Action? JoinPending;
@@ -307,6 +314,7 @@ public partial class P2PLobby : Node
             if (!IsHost && pid == 1) RaiseConnected();
         };
         peer.PeerDisconnected += id => PeerDisconnected?.Invoke((int)id);
+        PeerCreated?.Invoke(peer);
     }
 
     private void RaiseConnected()
