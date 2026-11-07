@@ -9,11 +9,12 @@ import (
 	"strconv"
 
 	"p2p-signaling-server/internal/bucket"
+	"p2p-signaling-server/internal/ops"
 )
 
 const actor = "rest"
 
-type Handler struct{ Buckets *bucket.Service }
+type Handler struct{ Ops *ops.Ops }
 
 // Register mounts routes under /admin/v1 on mux, wrapped by wrap (auth).
 func (h Handler) Register(mux *http.ServeMux, wrap func(http.Handler) http.Handler) {
@@ -24,12 +25,17 @@ func (h Handler) Register(mux *http.ServeMux, wrap func(http.Handler) http.Handl
 	route("PATCH /admin/v1/buckets/{id}", h.patch)
 	route("DELETE /admin/v1/buckets/{id}", h.delete)
 	route("GET /admin/v1/audit", h.audit)
+	route("GET /admin/v1/rooms", h.rooms)
+	route("POST /admin/v1/rooms/{bucket}/{code}/close", h.closeRoom)
+	route("GET /admin/v1/stats", h.stats)
 }
 
-func (h Handler) list(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, h.Buckets.List()) }
+func (h Handler) list(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, h.Ops.Buckets.List())
+}
 
 func (h Handler) get(w http.ResponseWriter, r *http.Request) {
-	b, ok := h.Buckets.Get(r.PathValue("id"))
+	b, ok := h.Ops.Buckets.Get(r.PathValue("id"))
 	if !ok {
 		writeErr(w, bucket.ErrNotFound)
 		return
@@ -49,7 +55,7 @@ func (h Handler) create(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, &bucket.ValidationError{Err: errors.New("id must match [a-z0-9-]{3,40}")})
 		return
 	}
-	b, err := h.Buckets.Create(r.Context(), actor, head.ID, raw)
+	b, err := h.Ops.Buckets.Create(r.Context(), actor, head.ID, raw)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -62,7 +68,7 @@ func (h Handler) patch(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	b, err := h.Buckets.Patch(r.Context(), actor, r.PathValue("id"), raw)
+	b, err := h.Ops.Buckets.Patch(r.Context(), actor, r.PathValue("id"), raw)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -71,7 +77,7 @@ func (h Handler) patch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h Handler) delete(w http.ResponseWriter, r *http.Request) {
-	if err := h.Buckets.Delete(r.Context(), actor, r.PathValue("id")); err != nil {
+	if err := h.Ops.DeleteBucket(r.Context(), actor, r.PathValue("id")); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -80,7 +86,7 @@ func (h Handler) delete(w http.ResponseWriter, r *http.Request) {
 
 func (h Handler) audit(w http.ResponseWriter, r *http.Request) {
 	n, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	e, err := h.Buckets.RecentAudit(r.Context(), n)
+	e, err := h.Ops.Buckets.RecentAudit(r.Context(), n)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -120,3 +126,17 @@ func writeErr(w http.ResponseWriter, err error) {
 	}
 	writeJSON(w, code, map[string]string{"error": msg})
 }
+
+func (h Handler) rooms(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, h.Ops.ListRooms(r.URL.Query().Get("bucket")))
+}
+
+func (h Handler) closeRoom(w http.ResponseWriter, r *http.Request) {
+	if !h.Ops.CloseRoom(r.PathValue("bucket"), r.PathValue("code")) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "room not found"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h Handler) stats(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, h.Ops.Stats()) }

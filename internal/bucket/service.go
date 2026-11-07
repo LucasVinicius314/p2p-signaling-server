@@ -18,6 +18,23 @@ type Service struct {
 	mu     sync.RWMutex
 	cache  map[string]Bucket
 	loaded bool
+
+	lastRefresh time.Time
+	lastErr     string
+}
+
+// Status describes the health of the config cache.
+type Status struct {
+	Loaded      bool      `json:"loaded"`
+	LastRefresh time.Time `json:"last_refresh"`
+	LastError   string    `json:"last_error,omitempty"`
+}
+
+// Status reports whether the cache has loaded and whether the last refresh succeeded.
+func (s *Service) Status() Status {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return Status{s.loaded, s.lastRefresh, s.lastErr}
 }
 
 func NewService(store Store) *Service {
@@ -28,6 +45,9 @@ func NewService(store Store) *Service {
 func (s *Service) Refresh(ctx context.Context) error {
 	list, err := s.store.List(ctx)
 	if err != nil {
+		s.mu.Lock()
+		s.lastErr = err.Error()
+		s.mu.Unlock()
 		return err
 	}
 	m := make(map[string]Bucket, len(list))
@@ -36,6 +56,7 @@ func (s *Service) Refresh(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.cache, s.loaded = m, true
+	s.lastRefresh, s.lastErr = s.now().UTC(), ""
 	s.mu.Unlock()
 	return nil
 }
@@ -100,6 +121,25 @@ func (s *Service) Create(ctx context.Context, actor, id string, overlay json.Raw
 	}
 	s.audit(ctx, actor, "create_bucket", id, nil, &b)
 	_ = s.Refresh(ctx)
+	return b, nil
+}
+
+// Preview validates what Create (if id is new) or Patch (if it exists) would produce,
+// without saving anything.
+func (s *Service) Preview(id string, fields json.RawMessage) (Bucket, error) {
+	b, exists := s.Get(id)
+	if !exists {
+		b = Default(id, "")
+	}
+	if len(fields) > 0 {
+		if err := decodeStrict(fields, &b); err != nil {
+			return Bucket{}, &ValidationError{err}
+		}
+	}
+	b.ID = id
+	if err := b.Validate(); err != nil {
+		return Bucket{}, &ValidationError{err}
+	}
 	return b, nil
 }
 

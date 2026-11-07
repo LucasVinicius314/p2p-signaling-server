@@ -9,8 +9,16 @@ import (
 	"p2p-signaling-server/internal/admin"
 	"p2p-signaling-server/internal/auth"
 	"p2p-signaling-server/internal/bucket"
+	"p2p-signaling-server/internal/metrics"
+	"p2p-signaling-server/internal/ops"
+	"p2p-signaling-server/internal/room"
 	"p2p-signaling-server/internal/store/memory"
 )
+
+type noCloser struct{}
+
+func (noCloser) CloseRoom(string, string, string) bool { return false }
+func (noCloser) CloseBucket(string, string)            {}
 
 const key = "0123456789abcdef0123456789abcdef"
 
@@ -21,7 +29,7 @@ func server(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	admin.Handler{Buckets: svc}.Register(mux, auth.Middleware(key, nil))
+	admin.Handler{Ops: &ops.Ops{Buckets: svc, Rooms: room.NewManager(), Closer: noCloser{}, Metrics: metrics.New()}}.Register(mux, auth.Middleware(key, nil))
 	s := httptest.NewServer(mux)
 	t.Cleanup(s.Close)
 	return s
@@ -87,5 +95,18 @@ func TestCRUDAndAudit(t *testing.T) {
 	}
 	if c, _ := do(t, s, "DELETE", "/admin/v1/buckets/racer", "", key); c != 204 {
 		t.Fatalf("delete %d", c)
+	}
+}
+
+func TestRoomsAndStats(t *testing.T) {
+	s := server(t)
+	if c, b := do(t, s, "GET", "/admin/v1/rooms", "", key); c != 200 || strings.TrimSpace(b) != "[]" {
+		t.Fatalf("rooms %d %s", c, b)
+	}
+	if c, _ := do(t, s, "POST", "/admin/v1/rooms/game/ABCDE/close", "", key); c != 404 {
+		t.Fatalf("close missing %d", c)
+	}
+	if c, b := do(t, s, "GET", "/admin/v1/stats", "", key); c != 200 || !strings.Contains(b, "rooms_active") {
+		t.Fatalf("stats %d %s", c, b)
 	}
 }

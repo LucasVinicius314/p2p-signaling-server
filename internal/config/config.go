@@ -15,7 +15,6 @@ const minKeyLen = 32
 type Config struct {
 	MasterAPIKey      string
 	MongoURI          string
-	MongoDB           string
 	Port              int
 	TrustedProxyCIDRs []netip.Prefix
 	LogLevel          slog.Level
@@ -27,7 +26,6 @@ func Load(getenv func(string) string) (Config, error) {
 	c := Config{
 		MasterAPIKey: getenv("MASTER_API_KEY"),
 		MongoURI:     getenv("MONGODB_URI"),
-		MongoDB:      orDefault(getenv("MONGODB_DB"), "p2p_signaling"),
 		Port:         8080,
 	}
 	if c.MongoURI == "" {

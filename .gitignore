@@ -2,4 +2,7 @@
 /bin/
 .env
 
+master-api-key
 mongo-uri
+deploy-key
+deploy-key.pub

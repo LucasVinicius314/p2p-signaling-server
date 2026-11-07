@@ -22,7 +22,7 @@ func TestDefaultsAndValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Port != 8080 || c.MongoDB != "p2p_signaling" || len(c.TrustedProxyCIDRs) != 2 {
+	if c.Port != 8080 || len(c.TrustedProxyCIDRs) != 2 {
 		t.Fatalf("unexpected config %+v", c)
 	}
 }
