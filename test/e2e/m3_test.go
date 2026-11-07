@@ -145,12 +145,22 @@ func TestLockRoom(t *testing.T) {
 	host.expectErr("bad_message")
 
 	host.send(msg{"t": "lock_room", "locked": true})
+	host.sync() // lock_room has no reply; a ping/pong guarantees it was applied
 	b.send(msg{"t": "join_room", "code": code})
 	b.expectErr("room_locked")
 
 	host.send(msg{"t": "lock_room", "locked": false})
+	host.sync()
 	b.send(msg{"t": "join_room", "code": code})
 	b.expect("joined")
+}
+
+// sync waits until the server has processed everything this client sent so far
+// (messages on one connection are handled in order).
+func (c *client) sync() {
+	c.t.Helper()
+	c.send(msg{"t": "ping"})
+	c.expect("pong")
 }
 
 func TestLockoutAfterFailedJoins(t *testing.T) {
@@ -197,7 +207,7 @@ func TestRoomsPerIP(t *testing.T) {
 
 	// freeing the room frees the quota
 	a.send(msg{"t": "leave"})
-	time.Sleep(50 * time.Millisecond)
+	a.sync()
 	b.send(msg{"t": "create_room"})
 	b.expect("room_created")
 }
