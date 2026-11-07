@@ -20,6 +20,10 @@ const (
 	ErrOriginRejected  = "origin_rejected"
 	ErrRoomNotFound    = "room_not_found"
 	ErrRoomFull        = "room_full"
+	ErrRoomLocked      = "room_locked"
+	ErrNotHost         = "not_host"
+	ErrJoinDenied      = "join_denied"
+	ErrLockedOut       = "locked_out"
 	ErrRateLimited     = "rate_limited"
 	ErrServerBusy      = "server_busy"
 )
@@ -45,6 +49,17 @@ type joinRoom struct {
 	Code string `json:"code"`
 }
 
+type approveMsg struct {
+	T      string `json:"t"`
+	Peer   int32  `json:"peer"`
+	Accept *bool  `json:"accept"`
+}
+
+type lockMsg struct {
+	T      string `json:"t"`
+	Locked *bool  `json:"locked"`
+}
+
 type signalIn struct {
 	T    string          `json:"t"`
 	To   int32           `json:"to"`
@@ -62,6 +77,7 @@ type welcome struct {
 	T          string      `json:"t"`
 	IceServers any         `json:"ice_servers"`
 	IcePolicy  string      `json:"ice_policy"`
+	Topology   string      `json:"topology"`
 	Limits     welcomeLims `json:"limits"`
 	Protocol   int         `json:"protocol"`
 }
@@ -97,6 +113,17 @@ type signalOut struct {
 	Data json.RawMessage `json:"data"`
 }
 
+type joinRequest struct {
+	T    string `json:"t"`
+	Peer int32  `json:"peer"`
+	Name string `json:"name,omitempty"`
+}
+
+type joinCancelled struct {
+	T    string `json:"t"`
+	Peer int32  `json:"peer"`
+}
+
 type roomClosed struct {
 	T      string `json:"t"`
 	Reason string `json:"reason"`
@@ -130,6 +157,10 @@ func decode(raw []byte) (t string, msg any, err error) {
 		msg = &joinRoom{}
 	case "signal":
 		msg = &signalIn{}
+	case "approve":
+		msg = &approveMsg{}
+	case "lock_room":
+		msg = &lockMsg{}
 	case "leave", "ping":
 		msg = &bare{}
 	default:

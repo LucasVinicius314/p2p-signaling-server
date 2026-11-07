@@ -1,0 +1,5 @@
+addons/webrtc_native/
+.godot/
+.mono/
+bin/
+obj/

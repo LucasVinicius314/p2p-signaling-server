@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
 	"strconv"
 
 	"p2p-signaling-server/internal/bucket"
@@ -14,7 +15,11 @@ import (
 
 const actor = "rest"
 
-type Handler struct{ Ops *ops.Ops }
+type Handler struct {
+	Ops *ops.Ops
+	// ClientIP, if set, enables GET /admin/v1/client-ip (shows how the server sees the caller).
+	ClientIP func(*http.Request) netip.Addr
+}
 
 // Register mounts routes under /admin/v1 on mux, wrapped by wrap (auth).
 func (h Handler) Register(mux *http.ServeMux, wrap func(http.Handler) http.Handler) {
@@ -28,6 +33,7 @@ func (h Handler) Register(mux *http.ServeMux, wrap func(http.Handler) http.Handl
 	route("GET /admin/v1/rooms", h.rooms)
 	route("POST /admin/v1/rooms/{bucket}/{code}/close", h.closeRoom)
 	route("GET /admin/v1/stats", h.stats)
+	route("GET /admin/v1/client-ip", h.clientIP)
 }
 
 func (h Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -140,3 +146,17 @@ func (h Handler) closeRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h Handler) stats(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, h.Ops.Stats()) }
+
+// clientIP reports how the server resolves the caller's address, to verify proxy settings
+// (TRUSTED_PROXY_CIDRS) against what Cloudflare and CapRover actually send.
+func (h Handler) clientIP(w http.ResponseWriter, r *http.Request) {
+	resolved := ""
+	if h.ClientIP != nil {
+		resolved = h.ClientIP(r).String()
+	}
+	writeJSON(w, 200, map[string]string{
+		"client_ip":       resolved,
+		"remote_addr":     r.RemoteAddr,
+		"x_forwarded_for": r.Header.Get("X-Forwarded-For"),
+	})
+}

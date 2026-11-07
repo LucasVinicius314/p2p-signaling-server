@@ -6,3 +6,5 @@ master-api-key
 mongo-uri
 deploy-key
 deploy-key.pub
+**/bin/
+**/obj/

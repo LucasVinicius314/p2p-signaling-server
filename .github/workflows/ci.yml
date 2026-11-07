@@ -11,3 +11,11 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
       - run: go build ./...
+  csharp-client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet build clients/godot-csharp/P2PSignaling.csproj -c Release

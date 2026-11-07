@@ -22,7 +22,6 @@ type Ops struct {
 	Rooms   *room.Manager
 	Closer  Closer
 	Metrics *metrics.Metrics
-	Version string
 }
 
 // DeleteBucket deletes the bucket and closes its live rooms.
@@ -46,7 +45,6 @@ func (o *Ops) Stats() metrics.Snapshot { return o.Metrics.Snapshot(o.Rooms.List(
 
 type Health struct {
 	Status        string        `json:"status"` // "ok" or "degraded"
-	Version       string        `json:"version"`
 	UptimeSeconds int64         `json:"uptime_seconds"`
 	Buckets       int           `json:"buckets"`
 	Cache         bucket.Status `json:"cache"`
@@ -57,7 +55,7 @@ type Health struct {
 func (o *Ops) Health() Health {
 	st := o.Buckets.Status()
 	h := Health{
-		Status: "ok", Version: o.Version, Buckets: len(o.Buckets.List()), Cache: st,
+		Status: "ok", Buckets: len(o.Buckets.List()), Cache: st,
 		UptimeSeconds: int64(o.Metrics.Uptime() / time.Second),
 	}
 	if !st.Loaded || st.LastError != "" {

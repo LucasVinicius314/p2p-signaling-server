@@ -16,7 +16,11 @@ import (
 	"p2p-signaling-server/internal/room"
 )
 
-const actor = "mcp"
+const (
+	actor = "mcp"
+	// serverInfoVersion is required by the MCP handshake; it is not a build version.
+	serverInfoVersion = "1"
+)
 
 // LimitsFields are optional per-field limit overrides.
 type LimitsFields struct {
@@ -121,7 +125,7 @@ func ptr[T any](v T) *T { return &v }
 
 // New builds the MCP server with all tools.
 func New(o *ops.Ops) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "p2p-signaling-server", Version: o.Version}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "p2p-signaling-server", Version: serverInfoVersion}, nil)
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true}
 
 	mcp.AddTool(s, &mcp.Tool{Name: "list_buckets", Description: "Summary of every game bucket, with live room counts.", Annotations: ro},
@@ -219,7 +223,7 @@ func New(o *ops.Ops) *mcp.Server {
 			return nil, statsOut{o.Stats()}, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "get_health", Description: "Config cache state, store connectivity, uptime and version.", Annotations: ro},
+	mcp.AddTool(s, &mcp.Tool{Name: "get_health", Description: "Config cache state, store connectivity and uptime.", Annotations: ro},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ none) (*mcp.CallToolResult, healthOut, error) {
 			return nil, healthOut{o.Health()}, nil
 		})

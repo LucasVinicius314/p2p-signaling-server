@@ -32,7 +32,7 @@ func newOps(t *testing.T) *ops.Ops {
 	if err := svc.Refresh(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	return &ops.Ops{Buckets: svc, Rooms: room.NewManager(), Closer: noCloser{}, Metrics: metrics.New(), Version: "test"}
+	return &ops.Ops{Buckets: svc, Rooms: room.NewManager(), Closer: noCloser{}, Metrics: metrics.New()}
 }
 
 func session(t *testing.T, o *ops.Ops) *mcp.ClientSession {

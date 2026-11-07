@@ -15,6 +15,7 @@ type Metrics struct {
 	joins        atomic.Int64
 	failedJoins  atomic.Int64
 	rateLimited  atomic.Int64
+	lockouts     atomic.Int64
 }
 
 func New() *Metrics { return &Metrics{start: time.Now()} }
@@ -49,6 +50,12 @@ func (m *Metrics) RateLimited() {
 	}
 }
 
+func (m *Metrics) Lockout() {
+	if m != nil {
+		m.lockouts.Add(1)
+	}
+}
+
 // Uptime since the process started.
 func (m *Metrics) Uptime() time.Duration {
 	if m == nil {
@@ -68,6 +75,7 @@ type Snapshot struct {
 	Joins         int64                   `json:"joins_total"`
 	FailedJoins   int64                   `json:"failed_joins_total"`
 	RateLimitHits int64                   `json:"rate_limit_hits_total"`
+	Lockouts      int64                   `json:"lockouts_total"`
 	RoomsActive   int                     `json:"rooms_active"`
 	PeersActive   int                     `json:"peers_active"`
 	PerBucket     map[string]BucketGauges `json:"per_bucket"`
@@ -78,7 +86,7 @@ func (m *Metrics) Snapshot(rooms []room.Info) Snapshot {
 	s := Snapshot{PerBucket: map[string]BucketGauges{}}
 	if m != nil {
 		s.Connections, s.RoomsCreated, s.Joins = m.connections.Load(), m.roomsCreated.Load(), m.joins.Load()
-		s.FailedJoins, s.RateLimitHits = m.failedJoins.Load(), m.rateLimited.Load()
+		s.FailedJoins, s.RateLimitHits, s.Lockouts = m.failedJoins.Load(), m.rateLimited.Load(), m.lockouts.Load()
 	}
 	for _, r := range rooms {
 		g := s.PerBucket[r.Bucket]

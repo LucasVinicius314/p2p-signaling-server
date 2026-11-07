@@ -3,7 +3,7 @@ package bucket
 import "testing"
 
 func TestDefaultIsValid(t *testing.T) {
-	if err := Default("lightspeed", "Lightspeed").Validate(); err != nil {
+	if err := Default("my-game", "My Game").Validate(); err != nil {
 		t.Fatal(err)
 	}
 }

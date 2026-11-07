@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"p2p-signaling-server/internal/admin"
@@ -17,18 +18,20 @@ import (
 	"p2p-signaling-server/internal/mcpserver"
 	"p2p-signaling-server/internal/metrics"
 	"p2p-signaling-server/internal/ops"
+	"p2p-signaling-server/internal/ratelimit"
 	"p2p-signaling-server/internal/room"
 	"p2p-signaling-server/internal/signaling"
 	"p2p-signaling-server/internal/store/mongo"
 )
 
-// version is set at build time with -ldflags "-X p2p-signaling-server/internal/app.version=...".
-var version = "dev"
-
 const (
 	databaseName  = "main"
 	shutdownGrace = 5 * time.Second
 	pollInterval  = 60 * time.Second
+	sweepInterval = 5 * time.Second
+
+	// maxAuthFailuresPerMinute bounds wrong-key attempts per address on the admin API and /mcp.
+	maxAuthFailuresPerMinute = 10
 )
 
 // Run serves until ctx is cancelled, then shuts down gracefully.
@@ -46,10 +49,19 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 
 	met := metrics.New()
 	rooms := room.NewManager()
-	sig := &signaling.Handler{Buckets: buckets, Rooms: rooms, Log: log, Metrics: met}
-	o := &ops.Ops{Buckets: buckets, Rooms: rooms, Closer: sig, Metrics: met, Version: version}
-	adm := admin.Handler{Ops: o}
-	authMW := auth.Middleware(cfg.MasterAPIKey, nil)
+	clientIP := func(r *http.Request) netip.Addr { return httpserver.ClientIP(r, cfg.TrustedProxyCIDRs) }
+	sig := &signaling.Handler{Buckets: buckets, Rooms: rooms, Log: log, Metrics: met, ClientIP: clientIP}
+	go sig.Run(ctx, sweepInterval)
+	o := &ops.Ops{Buckets: buckets, Rooms: rooms, Closer: sig, Metrics: met}
+	adm := admin.Handler{Ops: o, ClientIP: clientIP}
+	authFails := ratelimit.NewLimiter()
+	authMW := auth.Middleware(cfg.MasterAPIKey, func(r *http.Request) bool {
+		ok := authFails.Allow(clientIP(r).String(), maxAuthFailuresPerMinute)
+		if !ok {
+			met.RateLimited()
+		}
+		return ok
+	})
 	mcpHandler := mcpserver.Handler(mcpserver.New(o))
 	srv := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Port),
