@@ -81,3 +81,26 @@ func TestLockoutFailuresAgeOut(t *testing.T) {
 		t.Fatal("aged-out failures must not contribute")
 	}
 }
+
+func TestAvailableDoesNotConsume(t *testing.T) {
+	l := NewLimiter()
+	now := time.Unix(1000, 0)
+	l.now = func() time.Time { return now }
+	for i := 0; i < 5; i++ {
+		if !l.Available("k", 2) {
+			t.Fatal("Available must not use up the budget")
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if !l.Allow("k", 2) {
+			t.Fatalf("event %d of 2 must be allowed", i+1)
+		}
+	}
+	if l.Available("k", 2) {
+		t.Fatal("budget is spent, Available must say so")
+	}
+	now = now.Add(time.Minute)
+	if !l.Available("k", 2) {
+		t.Fatal("the budget refills")
+	}
+}

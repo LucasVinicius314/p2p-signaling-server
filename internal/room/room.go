@@ -9,6 +9,8 @@ import (
 	"net/netip"
 	"sync"
 	"time"
+
+	"p2p-signaling-server/internal/netutil"
 )
 
 const (
@@ -16,6 +18,9 @@ const (
 	Alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 	HostID   = 1
 	maxID    = 1<<31 - 1
+
+	// maxCodeAttempts bounds the search for an unused join code.
+	maxCodeAttempts = 64
 )
 
 var (
@@ -49,7 +54,7 @@ type Params struct {
 	MaxPlayers int
 	MaxRooms   int // per bucket
 	CodeLength int
-	RoomsPerIP int // live rooms one address may host in this bucket; 0 = unlimited
+	RoomsPerIP int // live rooms one address (an IPv6 /64 counts as one) may host in this bucket; 0 = unlimited
 }
 
 type Room struct {
@@ -93,8 +98,9 @@ func (m *Manager) Create(bucketID string, p Params, host *Peer) (*Room, error) {
 	}
 	if p.RoomsPerIP > 0 && host.IP.IsValid() {
 		n := 0
+		hostKey := netutil.Key(host.IP)
 		for _, r := range codes {
-			if r.host.IP == host.IP {
+			if netutil.Key(r.host.IP) == hostKey {
 				n++
 			}
 		}
@@ -103,7 +109,10 @@ func (m *Manager) Create(bucketID string, p Params, host *Peer) (*Room, error) {
 		}
 	}
 	var code string
-	for {
+	for attempt := 0; ; attempt++ {
+		if attempt == maxCodeAttempts {
+			return nil, ErrBusy // the code space is nearly full; bucket validation keeps this practically unreachable
+		}
 		code = NewCode(p.CodeLength)
 		if _, taken := codes[code]; !taken {
 			break

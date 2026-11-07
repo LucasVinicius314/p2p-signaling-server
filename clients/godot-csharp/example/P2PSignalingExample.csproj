@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <!-- In a real game use: <PackageReference Include="P2PSignaling.Godot" Version="..." /> -->
+    <!-- In a real game, reference the library the same way (see the README: git submodule or copied sources). -->
     <ProjectReference Include="..\P2PSignaling.csproj" />
   </ItemGroup>
 </Project>

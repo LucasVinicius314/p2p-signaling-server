@@ -36,8 +36,14 @@ func (h Handler) Register(mux *http.ServeMux, wrap func(http.Handler) http.Handl
 	route("GET /admin/v1/client-ip", h.clientIP)
 }
 
+// Everything this API returns about a bucket has its ICE credentials masked.
 func (h Handler) list(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, h.Ops.Buckets.List())
+	all := h.Ops.Buckets.List()
+	out := make([]bucket.Bucket, len(all))
+	for i, b := range all {
+		out[i] = b.Redacted()
+	}
+	writeJSON(w, 200, out)
 }
 
 func (h Handler) get(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +52,7 @@ func (h Handler) get(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, bucket.ErrNotFound)
 		return
 	}
-	writeJSON(w, 200, b)
+	writeJSON(w, 200, b.Redacted())
 }
 
 func (h Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +72,7 @@ func (h Handler) create(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, 201, b)
+	writeJSON(w, 201, b.Redacted())
 }
 
 func (h Handler) patch(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +85,7 @@ func (h Handler) patch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, 200, b)
+	writeJSON(w, 200, b.Redacted())
 }
 
 func (h Handler) delete(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +129,7 @@ func writeErr(w http.ResponseWriter, err error) {
 		code = http.StatusBadRequest
 	case errors.Is(err, bucket.ErrNotFound):
 		code = http.StatusNotFound
-	case errors.Is(err, bucket.ErrExists):
+	case errors.Is(err, bucket.ErrExists), errors.Is(err, bucket.ErrConflict):
 		code = http.StatusConflict
 	}
 	msg := "internal error"

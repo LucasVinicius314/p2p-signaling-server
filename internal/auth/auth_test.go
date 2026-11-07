@@ -54,3 +54,26 @@ func TestFailedAttemptsAreLimitedButTheRightKeyAlwaysWorks(t *testing.T) {
 		t.Fatalf("the owner must never be locked out: %d", c)
 	}
 }
+
+func TestBearerSchemeIsCaseInsensitive(t *testing.T) {
+	const key = "0123456789abcdef0123456789abcdef"
+	h := Middleware(key, nil)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	for _, header := range []string{"Bearer " + key, "bearer " + key, "BEARER " + key, "  Bearer   " + key + "  "} {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", header)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != 200 {
+			t.Fatalf("%q: %d", header, rec.Code)
+		}
+	}
+	for _, header := range []string{"Basic " + key, "Bearer", "Bearer ", "Bearerx " + key} {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", header)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != 401 {
+			t.Fatalf("%q must be refused, got %d", header, rec.Code)
+		}
+	}
+}

@@ -39,9 +39,8 @@ type hello struct {
 }
 
 type createRoom struct {
-	T          string          `json:"t"`
-	MaxPlayers int             `json:"max_players"`
-	Meta       json.RawMessage `json:"meta"`
+	T          string `json:"t"`
+	MaxPlayers int    `json:"max_players"`
 }
 
 type joinRoom struct {
@@ -122,6 +121,12 @@ type joinRequest struct {
 type joinCancelled struct {
 	T    string `json:"t"`
 	Peer int32  `json:"peer"`
+}
+
+// serverRestarting is sent to every client when the server shuts down; reconnect after RetryAfterMs.
+type serverRestarting struct {
+	T            string `json:"t"`
+	RetryAfterMs int64  `json:"retry_after_ms"`
 }
 
 type roomClosed struct {

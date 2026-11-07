@@ -23,9 +23,11 @@ image from the repo.
 
 ## Real client addresses (rate limits and lockouts depend on this)
 
-Rate limits, lockouts and the per-address room cap are keyed by client IP. Behind CapRover (and
+Rate limits, lockouts, the connection caps and the per-address room cap are keyed by client IP
+(an IPv6 address counts as its whole `/64`). Behind CapRover (and
 Cloudflare) the TCP peer is the proxy, so without configuration **every player looks like one
-address** and one abuser can lock out everybody.
+address** and one abuser can lock out everybody. The server logs a warning at startup when
+`TRUSTED_PROXY_CIDRS` is empty.
 
 The server believes `X-Forwarded-For` only when the direct peer is inside `TRUSTED_PROXY_CIDRS`,
 and reads the header right to left, skipping trusted networks: the first untrusted address is the
@@ -58,8 +60,18 @@ missing from `TRUSTED_PROXY_CIDRS` (add the network shown in `remote_addr` or th
 Only the TCP peer is trusted to vouch for the header, so a client that reaches the server directly
 cannot spoof its address by sending its own `X-Forwarded-For`.
 
+## Logs
+
+Logs are JSON on stdout (`LOG_LEVEL=debug` adds per-connection detail). Every HTTP request is logged with
+its route pattern (never the path, which can contain a room code), status and duration, and answered with
+an `X-Request-Id` header that appears in the matching log line. Signaling events (room created and closed,
+hello rejected, lockouts, capacity) are logged with the bucket id. Join codes, client addresses, player
+names and signaling payloads are never logged. A panic is logged with its stack trace.
+
 ## Restarts
 
-On SIGTERM the server stops accepting connections and shuts down. A redeploy drops signaling
-connections and closes the rooms (they live in memory); games that already have their peer-to-peer
-connections keep running, only new joins fail for a few seconds.
+On SIGTERM the server stops accepting connections (new ones get `503`), sends every connected client
+`server_restarting` with a retry delay, closes their sockets with code 1012, and then exits (within 8
+seconds). A redeploy closes the rooms (they live in memory), but games that already have their
+peer-to-peer connections keep running; only new joins fail for a few seconds, and a host has to create a
+new room afterwards.

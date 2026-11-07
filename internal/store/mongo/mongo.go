@@ -67,15 +67,28 @@ func (s *Store) Create(ctx context.Context, b bucket.Bucket) error {
 	return err
 }
 
-func (s *Store) Update(ctx context.Context, b bucket.Bucket) error {
-	r, err := s.buckets.ReplaceOne(ctx, bson.D{{Key: "_id", Value: b.ID}}, b)
+func (s *Store) Update(ctx context.Context, b bucket.Bucket, expectedRevision int64) error {
+	filter := bson.D{{Key: "_id", Value: b.ID}, {Key: "revision", Value: expectedRevision}}
+	if expectedRevision == 0 {
+		// Documents saved before revisions existed have no field; null matches both a missing and a null field.
+		filter = bson.D{{Key: "_id", Value: b.ID}, {Key: "revision", Value: bson.D{{Key: "$in", Value: bson.A{int64(0), nil}}}}}
+	}
+	r, err := s.buckets.ReplaceOne(ctx, filter, b)
 	if err != nil {
 		return err
 	}
-	if r.MatchedCount == 0 {
+	if r.MatchedCount > 0 {
+		return nil
+	}
+	// Nothing matched: either the bucket is gone or its revision moved on.
+	n, err := s.buckets.CountDocuments(ctx, bson.D{{Key: "_id", Value: b.ID}})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
 		return bucket.ErrNotFound
 	}
-	return nil
+	return bucket.ErrConflict
 }
 
 func (s *Store) Delete(ctx context.Context, id string) error {

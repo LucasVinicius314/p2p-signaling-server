@@ -25,9 +25,11 @@ const (
 // LimitsFields are optional per-field limit overrides.
 type LimitsFields struct {
 	JoinsPerIPPerMinute      *int `json:"joins_per_ip_per_minute,omitempty"`
-	FailedJoinsBeforeLockout *int `json:"failed_joins_before_lockout,omitempty"`
+	FailedJoinsPerConnection *int `json:"failed_joins_per_connection,omitempty" jsonschema:"wrong codes one connection may try before it is dropped"`
+	FailedJoinsBeforeLockout *int `json:"failed_joins_before_lockout,omitempty" jsonschema:"wrong codes from one address before it is locked out"`
 	LockoutSeconds           *int `json:"lockout_seconds,omitempty"`
-	RoomsPerIP               *int `json:"rooms_per_ip,omitempty"`
+	FailedJoinsPerMinute     *int `json:"failed_joins_per_minute,omitempty" jsonschema:"wrong codes the whole bucket tolerates per minute"`
+	RoomsPerIP               *int `json:"rooms_per_ip,omitempty" jsonschema:"0 = unlimited"`
 	MessageBytes             *int `json:"message_bytes,omitempty"`
 	MessagesPerSecond        *int `json:"messages_per_second,omitempty"`
 }
@@ -44,9 +46,8 @@ type Fields struct {
 	AcceptedVersions       *[]string           `json:"accepted_versions,omitempty" jsonschema:"empty list accepts any game version"`
 	HostApproval           *bool               `json:"host_approval,omitempty"`
 	RelayOnly              *bool               `json:"relay_only,omitempty" jsonschema:"requires a turn: or turns: ice server"`
-	PublicListing          *bool               `json:"public_listing,omitempty"`
-	AllowedOrigins         *[]string           `json:"allowed_origins,omitempty"`
-	IceServers             *[]bucket.IceServer `json:"ice_servers,omitempty" jsonschema:"replaces the whole list"`
+	AllowedOrigins         *[]string           `json:"allowed_origins,omitempty" jsonschema:"browser origins like https://example.com (no path); empty allows any"`
+	IceServers             *[]bucket.IceServer `json:"ice_servers,omitempty" jsonschema:"replaces the whole list; a credential shown as ******** is kept if the server and username are unchanged"`
 	Limits                 *LimitsFields       `json:"limits,omitempty"`
 	RoomIdleTimeoutSeconds *int                `json:"room_idle_timeout_seconds,omitempty"`
 	Notes                  *string             `json:"notes,omitempty"`
@@ -144,7 +145,7 @@ func New(o *ops.Ops) *mcp.Server {
 			if !ok {
 				return nil, bucketOut{}, bucket.ErrNotFound
 			}
-			return nil, bucketOut{b}, nil
+			return nil, bucketOut{b.Redacted()}, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "create_bucket", Description: "Create a game bucket. Unspecified fields get defaults (star, 8 players, public STUN, any version). Returns the created config."},
@@ -157,7 +158,7 @@ func New(o *ops.Ops) *mcp.Server {
 				return nil, bucketOut{}, err
 			}
 			b, err := o.Buckets.Create(ctx, actor, in.ID, raw)
-			return nil, bucketOut{b}, err
+			return nil, bucketOut{b.Redacted()}, err
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "update_bucket", Description: "Change fields of a bucket; the resulting whole config is validated."},
@@ -167,7 +168,7 @@ func New(o *ops.Ops) *mcp.Server {
 				return nil, bucketOut{}, err
 			}
 			b, err := o.Buckets.Patch(ctx, actor, in.ID, raw)
-			return nil, bucketOut{b}, err
+			return nil, bucketOut{b.Redacted()}, err
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "validate_bucket", Description: "Dry run: validate what create_bucket (new id) or update_bucket (existing id) would produce, without saving.", Annotations: ro},
@@ -190,7 +191,7 @@ func New(o *ops.Ops) *mcp.Server {
 		func(ctx context.Context, _ *mcp.CallToolRequest, in enabledArgs) (*mcp.CallToolResult, bucketOut, error) {
 			raw, _ := Fields{Enabled: ptr(in.Enabled)}.raw()
 			b, err := o.Buckets.Patch(ctx, actor, in.ID, raw)
-			return nil, bucketOut{b}, err
+			return nil, bucketOut{b.Redacted()}, err
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "delete_bucket", Description: "Permanently delete a bucket and close its live rooms. confirm must equal id.",

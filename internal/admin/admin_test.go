@@ -110,3 +110,29 @@ func TestRoomsAndStats(t *testing.T) {
 		t.Fatalf("stats %d %s", c, b)
 	}
 }
+
+func TestCredentialsNeverLeaveTheAdminAPI(t *testing.T) {
+	s := server(t)
+	status, body := do(t, s, "POST", "/admin/v1/buckets", `{"id":"game","name":"Game","ice_servers":[{"urls":["turn:t.example.com:3478"],"username":"u","credential":"s3cret"}]}`, key)
+	if status != 201 || strings.Contains(body, "s3cret") || !strings.Contains(body, bucket.RedactedMark) {
+		t.Fatalf("create must answer with a redacted bucket: %d %s", status, body)
+	}
+	for _, path := range []string{"/admin/v1/buckets", "/admin/v1/buckets/game", "/admin/v1/audit"} {
+		status, body = do(t, s, "GET", path, "", key)
+		if status != 200 || strings.Contains(body, "s3cret") {
+			t.Fatalf("%s leaked a credential: %d %s", path, status, body)
+		}
+	}
+	status, body = do(t, s, "PATCH", "/admin/v1/buckets/game", `{"notes":"x"}`, key)
+	if status != 200 || strings.Contains(body, "s3cret") {
+		t.Fatalf("patch leaked a credential: %d %s", status, body)
+	}
+}
+
+func TestRemovedFieldsAreRejected(t *testing.T) {
+	s := server(t)
+	status, _ := do(t, s, "POST", "/admin/v1/buckets", `{"id":"game","name":"Game","public_listing":true}`, key)
+	if status != 400 {
+		t.Fatalf("public_listing no longer exists and must be refused, got %d", status)
+	}
+}

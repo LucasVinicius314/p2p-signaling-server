@@ -114,7 +114,7 @@ func TestFullSequence(t *testing.T) {
 	host.send(msg{"t": "create_room"})
 	rc := host.expect("room_created")
 	code := rc["code"].(string)
-	if id(rc, "peer_id") != 1 || len(code) != 5 {
+	if id(rc, "peer_id") != 1 || len(code) != 6 {
 		t.Fatalf("room_created: %v", rc)
 	}
 

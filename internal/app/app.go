@@ -17,6 +17,7 @@ import (
 	"p2p-signaling-server/internal/httpserver"
 	"p2p-signaling-server/internal/mcpserver"
 	"p2p-signaling-server/internal/metrics"
+	"p2p-signaling-server/internal/netutil"
 	"p2p-signaling-server/internal/ops"
 	"p2p-signaling-server/internal/ratelimit"
 	"p2p-signaling-server/internal/room"
@@ -26,9 +27,11 @@ import (
 
 const (
 	databaseName  = "main"
-	shutdownGrace = 5 * time.Second
-	pollInterval  = 60 * time.Second
-	sweepInterval = 5 * time.Second
+	shutdownGrace = 8 * time.Second
+	// restartRetryAfter is what clients are told to wait before reconnecting after a shutdown.
+	restartRetryAfter = 5 * time.Second
+	pollInterval      = 60 * time.Second
+	sweepInterval     = 5 * time.Second
 
 	// maxAuthFailuresPerMinute bounds wrong-key attempts per address on the admin API and /mcp.
 	maxAuthFailuresPerMinute = 10
@@ -42,6 +45,11 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	}
 	defer store.Close(context.Background())
 	buckets := bucket.NewService(store)
+	buckets.OnAuditError = func(err error) { log.Error("audit log write failed", "error", err) }
+	if len(cfg.TrustedProxyCIDRs) == 0 {
+		log.Warn("TRUSTED_PROXY_CIDRS is empty: behind a reverse proxy every player will look like one address, " +
+			"and rate limits and lockouts will apply to everyone together. See docs/deploy-caprover.md.")
+	}
 	if err := buckets.Refresh(ctx); err != nil {
 		return fmt.Errorf("initial bucket load: %w", err)
 	}
@@ -56,7 +64,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	adm := admin.Handler{Ops: o, ClientIP: clientIP}
 	authFails := ratelimit.NewLimiter()
 	authMW := auth.Middleware(cfg.MasterAPIKey, func(r *http.Request) bool {
-		ok := authFails.Allow(clientIP(r).String(), maxAuthFailuresPerMinute)
+		ok := authFails.Allow(netutil.Key(clientIP(r)), maxAuthFailuresPerMinute)
 		if !ok {
 			met.RateLimited()
 		}
@@ -65,12 +73,13 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	mcpHandler := mcpserver.Handler(mcpserver.New(o))
 	srv := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Port),
-		Handler: httpserver.New(buckets.Loaded, func(m *http.ServeMux) {
+		Handler: httpserver.New(log, buckets.Loaded, func(m *http.ServeMux) {
 			m.Handle("GET /ws", sig)
 			adm.Register(m, authMW)
 			m.Handle("/mcp", authMW(mcpHandler))
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
@@ -84,6 +93,9 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	log.Info("shutting down")
 	sctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 	defer cancel()
+	// http.Server.Shutdown ignores WebSocket connections, so tell those clients first: they are sent
+	// server_restarting and closed, and can reconnect once the new instance is up.
+	sig.Shutdown(sctx, restartRetryAfter)
 	if err := srv.Shutdown(sctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

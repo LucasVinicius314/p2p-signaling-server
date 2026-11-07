@@ -1,6 +1,18 @@
+# The image only needs go.mod, go.sum, cmd/ and internal/. Everything else stays out of the build context,
+# in particular anything secret that happens to sit in the working folder.
 .git
 .github
-mongo-uri
 .env
+mongo-uri
+master-api-key
+deploy-key
+deploy-key.pub
 *.exe
-plan.md
+*.md
+LICENSE
+clients
+docs
+test
+**/bin
+**/obj
+**/.godot

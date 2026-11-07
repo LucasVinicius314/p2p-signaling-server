@@ -10,20 +10,12 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
-
-    <!-- NuGet package (published to GitHub Packages, see README) -->
-    <PackageId>P2PSignaling.Godot</PackageId>
-    <Version>0.1.0</Version>
-    <Description>Godot 4 (.NET) client for p2p-signaling-server: create or join a room by code and get a ready WebRTCMultiplayerPeer.</Description>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <!-- RepositoryUrl is supplied by the publish workflow (-p:RepositoryUrl=...) so GitHub Packages links the package to the repo. -->
-    <RepositoryType>git</RepositoryType>
-    <PackageTags>godot;webrtc;multiplayer;p2p;signaling</PackageTags>
+    <!-- Not published to any package registry: games take the source (see README). -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="src/**/*.cs" />
-    <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

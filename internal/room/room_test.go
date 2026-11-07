@@ -282,3 +282,38 @@ func TestSweepIdleAndPending(t *testing.T) {
 		t.Fatalf("active room must survive: %+v (quiet was %s)", infos, quiet.Code)
 	}
 }
+
+func TestRoomsPerIPCountsAWholeIPv6Prefix(t *testing.T) {
+	m := NewManager()
+	p := Params{Topology: "star", MaxPlayers: 4, MaxRooms: 50, CodeLength: 5, RoomsPerIP: 2}
+	// Different addresses inside one /64 are one subscriber.
+	for _, a := range []string{"2001:db8:1:2::1", "2001:db8:1:2:dead:beef::7"} {
+		if _, err := m.Create("g", p, peerAt(a)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := m.Create("g", p, peerAt("2001:db8:1:2:cafe::9")); err != ErrTooManyRooms {
+		t.Fatalf("a third address in the same /64 must be refused, got %v", err)
+	}
+	if _, err := m.Create("g", p, peerAt("2001:db8:1:3::1")); err != nil {
+		t.Fatalf("another /64 is fine: %v", err)
+	}
+}
+
+func TestCreateGivesUpWhenCodesRunOut(t *testing.T) {
+	m := NewManager()
+	// One-character codes: 32 possible. The search for a free code is bounded, so a nearly full space
+	// ends in ErrBusy instead of spinning.
+	p := Params{Topology: "star", MaxPlayers: 2, MaxRooms: 1000, CodeLength: 1}
+	var busy bool
+	for i := 0; i < 200 && !busy; i++ {
+		if _, err := m.Create("g", p, peer()); err == ErrBusy {
+			busy = true
+		} else if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !busy {
+		t.Fatal("expected ErrBusy once the code space is exhausted")
+	}
+}

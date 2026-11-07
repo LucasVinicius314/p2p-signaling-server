@@ -31,6 +31,12 @@ public partial class P2PLobby : Node
     /// <summary>The WebRTCMultiplayerPeer (typed as its bound base class, see <see cref="Rtc"/>).</summary>
     public MultiplayerPeer? Peer { get; private set; }
 
+    /// <summary>True while the signaling connection is up (it is not needed once linked, but keeps a host's room open).</summary>
+    public bool HasSignaling => _ws != null && _phase == Phase.Ready;
+
+    /// <summary>After a <c>server_restarting</c> notice: how long the server asked clients to wait before reconnecting.</summary>
+    public double RetryAfterSeconds { get; private set; }
+
     /// <summary>Host: the room exists and this is its join code.</summary>
     public event Action<string>? CodeReady;
     /// <summary>The multiplayer peer is ready to assign. Host: right after the room exists. Client: once the host link is up.</summary>
@@ -45,6 +51,13 @@ public partial class P2PLobby : Node
     public event Action<int>? PeerDisconnected;
     /// <summary>The room is gone (host left, idle, closed by an admin). Arguments: reason.</summary>
     public event Action<string>? RoomClosed;
+    /// <summary>
+    /// The signaling connection ended after the game was already linked, for example because the server
+    /// restarted (<c>server_restarting</c>) or the network dropped (<c>connection_closed</c>). Existing
+    /// peer-to-peer links keep working, but the server forgot the room: a host's code no longer works and
+    /// nobody new can join until a new room is created. Argument: the reason.
+    /// </summary>
+    public event Action<string>? SignalingLost;
     /// <summary>Something went wrong: a server error code (see docs/protocol.md) or a local one such as connect_timeout.</summary>
     public event Action<string, string>? Failed;
 
@@ -67,6 +80,7 @@ public partial class P2PLobby : Node
     private double _phaseAge;
     private double _pingAge;
     private bool _connectedRaised;
+    private bool _serverRestarting;
     private string _topology = "star";
     private Godot.Collections.Dictionary _ice = new();
     private readonly Dictionary<int, Link> _links = new();
@@ -177,8 +191,18 @@ public partial class P2PLobby : Node
             case WebSocketPeer.State.Closed:
                 _ws = null;
                 _phase = Phase.Idle;
-                // After the host link is up the game no longer needs signaling.
-                if (!_connectedRaised) Fatal("signaling_closed", "the signaling connection closed");
+                if (!_connectedRaised)
+                {
+                    if (_serverRestarting) Fatal("server_restarting", $"the server is restarting; try again in {RetryAfterSeconds:0} s");
+                    else Fatal("signaling_closed", "the signaling connection closed");
+                }
+                else
+                {
+                    // Linked games do not need signaling, but the server forgot the room, so tell the game.
+                    var reason = _serverRestarting ? "server_restarting" : "connection_closed";
+                    if (IsHost) RoomCode = null;
+                    SignalingLost?.Invoke(reason);
+                }
                 break;
         }
     }
@@ -234,6 +258,11 @@ public partial class P2PLobby : Node
 
             case "signal":
                 HandleSignal(m);
+                break;
+
+            case "server_restarting":
+                _serverRestarting = true;
+                RetryAfterSeconds = m.Int("retry_after_ms") / 1000.0;
                 break;
 
             case "room_closed":
@@ -378,6 +407,7 @@ public partial class P2PLobby : Node
         PeerId = 0;
         IsHost = false;
         _connectedRaised = false;
+        _serverRestarting = false;
         _onReady = null;
         if (closeSocket)
         {

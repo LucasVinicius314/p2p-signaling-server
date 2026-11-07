@@ -36,11 +36,15 @@ func (s *Store) Create(_ context.Context, b bucket.Bucket) error {
 	return nil
 }
 
-func (s *Store) Update(_ context.Context, b bucket.Bucket) error {
+func (s *Store) Update(_ context.Context, b bucket.Bucket, expectedRevision int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.items[b.ID]; !ok {
+	cur, ok := s.items[b.ID]
+	if !ok {
 		return bucket.ErrNotFound
+	}
+	if cur.Revision != expectedRevision {
+		return bucket.ErrConflict
 	}
 	s.items[b.ID] = b
 	return nil

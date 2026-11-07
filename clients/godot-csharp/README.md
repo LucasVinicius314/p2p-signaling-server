@@ -6,45 +6,34 @@ signaling server, creates or joins a room by code, sets up the WebRTC links and 
 
 ## Install
 
-The package is published to GitHub Packages. GitHub's NuGet registry needs a login even to
-download, so each machine (and CI) needs a token with `read:packages` once.
+The library is not published to any package registry. A game takes it as source, in one of two ways.
 
-1. Add a source in your game's `nuget.config` (next to the `.csproj`/`.sln`):
+**A. Git submodule** (updates with `git submodule update --remote`):
 
-   ```xml
-   <?xml version="1.0" encoding="utf-8"?>
-   <configuration>
-     <packageSources>
-       <add key="github-p2p" value="https://nuget.pkg.github.com/<OWNER>/index.json" />
-     </packageSources>
-   </configuration>
-   ```
+```
+git submodule add https://github.com/<OWNER>/p2p-signaling-server libs/p2p-signaling-server
+```
 
-2. Store your credentials in your **user-level** NuGet config (never commit a token):
+then reference the project from the game's `.csproj`:
 
-   ```
-   dotnet nuget update source github-p2p --username <GITHUB_USERNAME> --password <TOKEN> --store-password-in-clear-text --configfile "%APPDATA%\NuGet\NuGet.Config"
-   ```
+```xml
+<ItemGroup>
+  <ProjectReference Include="libs/p2p-signaling-server/clients/godot-csharp/P2PSignaling.csproj" />
+</ItemGroup>
+```
 
-   `<OWNER>` is the GitHub user or organization that publishes the package (the owner of this
-   repository). `<TOKEN>` is a GitHub personal access token (classic) with the `read:packages` scope. With the
-   GitHub CLI: `gh auth refresh -s read:packages` and use `gh auth token`.
+CI for the game must check out submodules (`actions/checkout` with `submodules: true`).
 
-3. Reference the package in the game's `.csproj`:
+**B. Copy the sources.** The library is three plain files, `src/P2PLobby.cs`, `src/Protocol.cs` and
+`src/Rtc.cs`. Copy them into the game, for example under `scripts/p2p/`, and Godot's .NET SDK compiles them
+with the rest of the game. The game project needs `ImplicitUsings` and `Nullable` enabled (the Godot .NET
+SDK defaults) and a recent `LangVersion`.
 
-   ```xml
-   <PackageReference Include="P2PSignaling.Godot" Version="0.1.0" />
-   ```
-
-In GitHub Actions, add a step before restore:
-`dotnet nuget add source https://nuget.pkg.github.com/<OWNER>/index.json -n github-p2p -u <GITHUB_USERNAME> -p ${{ secrets.PACKAGES_TOKEN }} --store-password-in-clear-text`
-(the default `GITHUB_TOKEN` can read packages from the same repo, but a game in another repo needs a PAT secret).
-
-The library depends on `GodotSharp` 4.7.2, which your game already has through `Godot.NET.Sdk`.
+Either way the library depends on `GodotSharp`, which your game already has through `Godot.NET.Sdk`.
 
 ## WebRTC on desktop
 
-Godot ships WebRTC as a native extension, and it is **not** part of the NuGet package. Desktop
+Godot ships WebRTC as a native extension, and it is **not** part of this library. Desktop
 exports (Windows, Linux, macOS) need the `webrtc-native` extension in the game project:
 
 1. Download `godot-extension-webrtc_native.zip` from
@@ -94,9 +83,10 @@ After `Connected` the game is ordinary Godot multiplayer. The host is peer id 1.
 | `JoinRequest(id, name)` | host, in approval mode: answer with `Approve(id, true/false)` |
 | `JoinCancelled(id)` | host: a pending request was withdrawn or timed out |
 | `RoomClosed(reason)` | `host_left`, `idle_timeout`, `closed_by_admin`, `bucket_deleted` |
-| `Failed(code, message)` | a server error code (`room_not_found`, `locked_out`, ...) or a local one (`connect_timeout`, `webrtc_unavailable`, `signaling_closed`) |
+| `SignalingLost(reason)` | the signaling connection ended after you were linked (`server_restarting` after a redeploy, or `connection_closed`). Existing links keep working, but the server forgot the room: a host should create a new one, since the old code is dead and nobody new can join |
+| `Failed(code, message)` | a server error code (`room_not_found`, `locked_out`, ...) or a local one (`connect_timeout`, `webrtc_unavailable`, `signaling_closed`, `server_restarting`) |
 
-Other methods: `SetLocked(bool)` (host), `Leave()`.
+Other methods and properties: `SetLocked(bool)` (host), `Leave()`, `HasSignaling`, and `RetryAfterSeconds` (how long a restarting server asked clients to wait).
 
 ### Notes
 
@@ -122,9 +112,3 @@ Godot_v4.7.2-stable_mono_win64_console.exe --headless --path clients/godot-cshar
 ```
 
 It prints `LOOPBACK OK` and exits 0 on success.
-
-## Publishing (maintainers)
-
-Push a tag named `godot-csharp-v<version>` (for example `godot-csharp-v0.1.0`); the
-`publish-godot-csharp` workflow packs and pushes the package to GitHub Packages using the
-repository's `GITHUB_TOKEN`. The version comes from the tag.

@@ -199,3 +199,32 @@ func TestHTTPEndpointRequiresKey(t *testing.T) {
 		t.Fatalf("with key: %d", c)
 	}
 }
+
+func TestMCPNeverReturnsCredentials(t *testing.T) {
+	cs := session(t, newOps(t))
+	created, isErr := call(t, cs, "create_bucket", map[string]any{
+		"id": "game", "name": "Game",
+		"ice_servers": []map[string]any{{"urls": []string{"turn:t.example.com:3478"}, "username": "u", "credential": "s3cret"}},
+	})
+	if isErr {
+		t.Fatal("create_bucket failed")
+	}
+	got, _ := call(t, cs, "get_bucket", map[string]any{"id": "game"})
+	updated, _ := call(t, cs, "update_bucket", map[string]any{"id": "game", "notes": "x"})
+	validated, _ := call(t, cs, "validate_bucket", map[string]any{"id": "game", "notes": "y"})
+	audit, _ := call(t, cs, "get_audit_log", map[string]any{})
+	for name, v := range map[string]any{"create": created, "get": got, "update": updated, "validate": validated, "audit": audit} {
+		b, _ := json.Marshal(v)
+		if strings.Contains(string(b), "s3cret") {
+			t.Fatalf("%s leaked a credential: %s", name, b)
+		}
+	}
+	if !strings.Contains(mustJSON(got), bucket.RedactedMark) {
+		t.Fatalf("the credential should appear masked: %s", mustJSON(got))
+	}
+}
+
+func mustJSON(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
+}

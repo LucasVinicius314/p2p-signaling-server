@@ -49,6 +49,18 @@ func (l *Limiter) Allow(key string, perMinute int) bool {
 	return b.lim.AllowN(now, 1)
 }
 
+// Available reports whether Allow would currently succeed for key, without using up an event.
+func (l *Limiter) Available(key string, perMinute int) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := l.now()
+	b := l.m[key]
+	if b == nil || b.per != perMinute {
+		return true // a fresh bucket starts full
+	}
+	return b.lim.TokensAt(now) >= 1
+}
+
 // Lockout locks a key out after repeated failures.
 type Lockout struct {
 	mu     sync.Mutex
