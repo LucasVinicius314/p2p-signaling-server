@@ -43,7 +43,7 @@ type Fields struct {
 	MaxPlayers             *int                `json:"max_players,omitempty" jsonschema:"2 to 16 (mesh: at most 8)"`
 	MaxRooms               *int                `json:"max_rooms,omitempty"`
 	CodeLength             *int                `json:"code_length,omitempty" jsonschema:"4 to 8"`
-	AcceptedVersions       *[]string           `json:"accepted_versions,omitempty" jsonschema:"empty list accepts any game version"`
+	AcceptedVersions       *[]string           `json:"accepted_versions,omitempty" jsonschema:"deprecated and ignored; the server never checks game versions"`
 	HostApproval           *bool               `json:"host_approval,omitempty"`
 	RelayOnly              *bool               `json:"relay_only,omitempty" jsonschema:"requires a turn: or turns: ice server"`
 	AllowedOrigins         *[]string           `json:"allowed_origins,omitempty" jsonschema:"browser origins like https://example.com (no path); empty allows any"`
@@ -148,7 +148,7 @@ func New(o *ops.Ops) *mcp.Server {
 			return nil, bucketOut{b.Redacted()}, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "create_bucket", Description: "Create a game bucket. Unspecified fields get defaults (star, 8 players, public STUN, any version). Returns the created config."},
+	mcp.AddTool(s, &mcp.Tool{Name: "create_bucket", Description: "Create a game bucket. Unspecified fields get defaults (star, 8 players, public STUN). Returns the created config."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in writeArgs) (*mcp.CallToolResult, bucketOut, error) {
 			if in.Name == nil {
 				return nil, bucketOut{}, errors.New("name is required")

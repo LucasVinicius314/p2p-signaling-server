@@ -69,10 +69,10 @@ is covered in [docs/deploy-caprover.md](docs/deploy-caprover.md).
 Everything admin uses the same key: `Authorization: Bearer <MASTER_API_KEY>`.
 
 ```
-# create a bucket for a game (unspecified fields get defaults: star, 8 players, public STUN, any version)
+# create a bucket for a game (unspecified fields get defaults: star, 8 players, public STUN)
 curl -X POST https://signal.example.com/admin/v1/buckets \
   -H "Authorization: Bearer $MASTER_API_KEY" -H "Content-Type: application/json" \
-  -d '{"id":"my-game","name":"My Game","accepted_versions":["1.0.0"]}'
+  -d '{"id":"my-game","name":"My Game","max_players":8}'
 
 curl -H "Authorization: Bearer $MASTER_API_KEY" https://signal.example.com/admin/v1/buckets
 curl -H "Authorization: Bearer $MASTER_API_KEY" https://signal.example.com/admin/v1/stats

@@ -288,16 +288,3 @@ func (b Bucket) validateLimits(add func(string, ...any)) {
 	span("message_bytes", l.MessageBytes, 256, maxMessageBytes)
 	span("messages_per_second", l.MessagesPerSecond, 1, 1000)
 }
-
-// VersionAccepted: an empty list accepts any version.
-func (b Bucket) VersionAccepted(v string) bool {
-	if len(b.AcceptedVersions) == 0 {
-		return true
-	}
-	for _, a := range b.AcceptedVersions {
-		if a == v {
-			return true
-		}
-	}
-	return false
-}

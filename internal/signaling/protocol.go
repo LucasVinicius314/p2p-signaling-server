@@ -16,7 +16,6 @@ const (
 	ErrUnsupportedProt = "unsupported_protocol"
 	ErrBucketNotFound  = "bucket_not_found"
 	ErrBucketDisabled  = "bucket_disabled"
-	ErrVersionRejected = "version_rejected"
 	ErrOriginRejected  = "origin_rejected"
 	ErrRoomNotFound    = "room_not_found"
 	ErrRoomFull        = "room_full"

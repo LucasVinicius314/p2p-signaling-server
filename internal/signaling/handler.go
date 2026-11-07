@@ -340,9 +340,6 @@ func (h *Handler) hello(c *conn, r *http.Request) (bucket.Bucket, bool) {
 	if !b.Enabled {
 		return fail(ErrBucketDisabled, "bucket is disabled", "bucket", b.ID)
 	}
-	if !b.VersionAccepted(hi.GameVersion) {
-		return fail(ErrVersionRejected, "game version not accepted", "bucket", b.ID, "version", clip(hi.GameVersion, 64))
-	}
 	if origin := r.Header.Get("Origin"); origin != "" && len(b.AllowedOrigins) > 0 && !slices.Contains(b.AllowedOrigins, origin) {
 		return fail(ErrOriginRejected, "origin not allowed", "bucket", b.ID)
 	}

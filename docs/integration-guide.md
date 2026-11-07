@@ -35,8 +35,7 @@ extension, and your own session code (wiring plus the decision of what to replic
 
 Do these in order. Each step says how to know it worked.
 
-1. **Create the bucket** on the server (section 3). *Done when* `get_bucket` shows it and `accepted_versions` contains the
-   version string your game will report.
+1. **Create the bucket** on the server (section 3). *Done when* `get_bucket` shows it.
 2. **Add the library** as a git submodule and compile its sources into the game assembly (section 4). *Done when* the game
    builds and `new P2PSignaling.P2PLobby(...)` resolves.
 3. **Add the WebRTC native extension** (section 5). *Done when* `ClassDB.ClassExists("WebRTCMultiplayerPeer")` is true on
@@ -57,7 +56,7 @@ Create it with the MCP tool `create_bucket` or the REST API. Admin access needs 
 ```
 curl -X POST https://<server>/admin/v1/buckets \
   -H "Authorization: Bearer $MASTER_API_KEY" -H "Content-Type: application/json" -H "User-Agent: admin-script/1.0" \
-  -d '{"id":"my-game","name":"My Game","accepted_versions":["1.0.0"]}'
+  -d '{"id":"my-game","name":"My Game","max_players":8}'
 ```
 
 Send a `User-Agent`: the live server sits behind Cloudflare, which rejects the default Python and some library user agents
@@ -67,7 +66,7 @@ with `error code: 1010`. MCP clients are not affected.
 |---|---|---|
 | `id` | the bucket id the game passes | lowercase letters, digits and `-`, 3 to 40 characters; cannot be changed later |
 | `name` | display name | required |
-| `accepted_versions` | the exact version strings the game may report | **empty accepts any version.** Add each release's version **before** shipping it, or those players get `version_rejected` |
+| `accepted_versions` | deprecated, ignored | the server never checks the game version |
 | `max_players` | players per room | 2 to 16 (mesh: 2 to 8) |
 | `topology` | `star` (everyone connects to the host) or `mesh` (everyone to everyone) | use `star` unless you need peer to peer between clients |
 | `code_length` | characters in a room code | 4 to 8; default 6 |
@@ -85,7 +84,7 @@ Everything is validated as a whole on every change. Useful follow-ups:
 
 **The version string.** Decide how the game produces it and keep it consistent with the bucket. Lightspeed reports the
 release tag without its leading `v` (read from a `version.txt` next to the executable), and `dev` when run from source.
-Any string works as long as it is listed in `accepted_versions`.
+It is informational only: the server accepts any string and never rejects a player over it.
 
 For local development you do not need the real server: see section 9 (`go run ./cmd/devserver`).
 
@@ -225,7 +224,6 @@ well (it is what Lightspeed does, section 11):
 - **Submodules in CI:** `actions/checkout` with `submodules: true` (both repositories are public, no token needed).
 - **The native extension:** run your fetch script before the export step; fail the build if `addons/webrtc_native` is
   missing.
-- **Each release:** add the new version to the bucket's `accepted_versions` **before** players get the build.
 - **Version string:** produce it the same way in every build (for example from the release tag).
 - **Server restarts and redeploys:** handle `SignalingLost` and `Failed` / `server_restarting` (`RetryAfterSeconds` says
   how long to wait).
@@ -237,7 +235,7 @@ Always run the real thing. Compiling proves nothing here: the separate-assembly 
 **Local server.** The dev server keeps buckets in memory, needs no database and runs the same WebSocket handler:
 
 ```
-go run ./cmd/devserver -bucket my-game -versions 1.0.0,dev        # listens on 127.0.0.1:8099
+go run ./cmd/devserver -bucket my-game        # listens on 127.0.0.1:8099
 ```
 
 **The shipped example** (host in one terminal, client in another; add `addons/webrtc_native` to the example project first):
@@ -270,7 +268,6 @@ message.
 | RPC fails with "node not found" or reaches nobody | the RPC node has a different path on the two peers | use one autoload at a fixed path (rule 4) |
 | An RPC sent right after `PeerCreated` or `JoinRoom` fails | the link is not up yet | send after `ConnectedToServer` (client) or `PeerConnected` (host) (rule 2) |
 | `Failed: webrtc_unavailable` | the WebRTC native extension is missing from the project or the export | section 5 |
-| `Failed: version_rejected` | the version the game reports is not in the bucket's `accepted_versions` | add it (section 3) |
 | `Failed: bucket_not_found` / `bucket_disabled` | wrong bucket id or server, or the bucket is switched off | check the id; `get_bucket` |
 | `Failed: room_not_found` | wrong code, or the room closed (the server answers the same for both) | check the code; the host may have left |
 | `Failed: room_full` / `room_locked` | the room is at `max_players`, or the host locked it | |

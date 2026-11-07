@@ -241,7 +241,6 @@ func TestHelloRejections(t *testing.T) {
 		hello  msg
 		code   string
 	}{
-		{"version", nil, msg{"t": "hello", "bucket": "game", "game_version": "9", "protocol": 1}, "version_rejected"},
 		{"bucket", nil, msg{"t": "hello", "bucket": "nope", "game_version": "1.0.0", "protocol": 1}, "bucket_not_found"},
 		{"protocol", nil, msg{"t": "hello", "bucket": "game", "game_version": "1.0.0", "protocol": 7}, "unsupported_protocol"},
 		{"origin", http.Header{"Origin": {"https://evil.example"}}, msg{"t": "hello", "bucket": "game", "game_version": "1.0.0", "protocol": 1}, "origin_rejected"},

@@ -55,13 +55,13 @@ The server closes with a WebSocket close code that says why:
 
 | Code | Reason text | Meaning |
 |---|---|---|
-| `1008` | an error code (`bad_message`, `version_rejected`, ...) | the handshake was rejected; the same code was sent as an `error` message first |
+| `1008` | an error code (`bad_message`, ...) | the handshake was rejected; the same code was sent as an `error` message first |
 | `1008` | `too_many_failed_joins` | this connection tried too many wrong join codes (see below) |
 | `1012` | `server restarting` | graceful shutdown; see `server_restarting` |
 
 ## Error codes
 
-`bad_message`, `unsupported_protocol`, `bucket_not_found`, `bucket_disabled`, `version_rejected`,
+`bad_message`, `unsupported_protocol`, `bucket_not_found`, `bucket_disabled`,
 `origin_rejected`, `room_not_found`, `room_full`, `room_locked`, `join_denied`, `not_host`,
 `rate_limited`, `locked_out`, `server_busy`.
 

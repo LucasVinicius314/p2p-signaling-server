@@ -28,7 +28,7 @@ AddChild(lobby);
 |---|---|
 | `Url` | server base address; `http(s)://` becomes `ws(s)://` |
 | `Bucket` | the game's bucket id on the server |
-| `GameVersion` | must be in the bucket's `accepted_versions` |
+| `GameVersion` | informational; the server never rejects a version |
 | `PlayerName` | optional display name (the host sees it in `JoinRequest`) |
 | `MaxPlayers` | requested room size for `CreateRoom`; 0 uses the bucket's maximum |
 | `ConnectTimeoutSeconds` | how long a link may take to come up before `Failed` (default 20) |
@@ -55,7 +55,7 @@ AddChild(lobby);
 | `JoinCancelled(id)` | host: a pending request was withdrawn or timed out |
 | `RoomClosed(reason)` | `host_left`, `idle_timeout`, `closed_by_admin`, `bucket_deleted` |
 | `SignalingLost(reason)` | the signaling connection ended after you were linked (`server_restarting` after a redeploy, or `connection_closed`). Existing links keep working, but the server forgot the room: a host should create a new one, since the old code is dead and nobody new can join |
-| `Failed(code, message)` | a server error code (`room_not_found`, `version_rejected`, `locked_out`, ...) or a local one (`connect_timeout`, `webrtc_unavailable`, `signaling_closed`, `server_restarting`, `connect_failed`). What each means and how to fix it is in the guide's [troubleshooting table](../../docs/integration-guide.md#10-troubleshooting) |
+| `Failed(code, message)` | a server error code (`room_not_found`, `locked_out`, ...) or a local one (`connect_timeout`, `webrtc_unavailable`, `signaling_closed`, `server_restarting`, `connect_failed`). What each means and how to fix it is in the guide's [troubleshooting table](../../docs/integration-guide.md#10-troubleshooting) |
 
 ### Behaviour worth knowing
 

@@ -34,17 +34,6 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-func TestVersionAccepted(t *testing.T) {
-	b := Default("game", "Game")
-	if !b.VersionAccepted("9") {
-		t.Error("empty list should accept any")
-	}
-	b.AcceptedVersions = []string{"1"}
-	if b.VersionAccepted("2") || !b.VersionAccepted("1") {
-		t.Error("list not enforced")
-	}
-}
-
 func TestValidateRejectsOutOfBoundsAndSloppyConfig(t *testing.T) {
 	cases := map[string]func(*Bucket){
 		"name too long":          func(b *Bucket) { b.Name = string(make([]byte, 101)) },

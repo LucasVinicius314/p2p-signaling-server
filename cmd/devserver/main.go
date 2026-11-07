@@ -4,7 +4,7 @@
 // stops. It runs the same WebSocket handler as the real server, so a game behaves the same against it. Never run it on a
 // public address.
 //
-//	go run ./cmd/devserver -bucket my-game -versions 1.0.0,dev
+//	go run ./cmd/devserver -bucket my-game
 //
 // Then point the game at http://127.0.0.1:8099 and use the bucket id you gave. See docs/integration-guide.md.
 package main
@@ -32,7 +32,6 @@ import (
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8099", "address to listen on (keep it on loopback)")
 	buckets := flag.String("bucket", "game", "bucket ids to create, comma separated")
-	versions := flag.String("versions", "", "game versions the buckets accept, comma separated; empty accepts any")
 	topology := flag.String("topology", "star", "star or mesh")
 	maxPlayers := flag.Int("max-players", 8, "players per room")
 	verbose := flag.Bool("v", false, "log per-connection detail")
@@ -44,23 +43,20 @@ func main() {
 	}
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 
-	if err := run(*addr, split(*buckets), split(*versions), *topology, *maxPlayers, log); err != nil {
+	if err := run(*addr, split(*buckets), *topology, *maxPlayers, log); err != nil {
 		log.Error("devserver failed", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(addr string, ids, versions []string, topology string, maxPlayers int, log *slog.Logger) error {
+func run(addr string, ids []string, topology string, maxPlayers int, log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if versions == nil {
-		versions = []string{}
-	}
 	svc := bucket.NewService(memory.New())
 	for _, id := range ids {
 		overlay, _ := json.Marshal(map[string]any{
-			"name": id, "topology": topology, "max_players": maxPlayers, "accepted_versions": versions,
+			"name": id, "topology": topology, "max_players": maxPlayers,
 		})
 		if _, err := svc.Create(ctx, "devserver", id, overlay); err != nil {
 			return fmt.Errorf("bucket %q: %w", id, err)
@@ -77,7 +73,7 @@ func run(addr string, ids, versions []string, topology string, maxPlayers int, l
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	log.Info("dev server listening", "url", "http://"+addr, "buckets", ids, "accepted_versions", versions, "topology", topology)
+	log.Info("dev server listening", "url", "http://"+addr, "buckets", ids, "topology", topology)
 
 	select {
 	case err := <-errc:

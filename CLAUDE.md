@@ -29,7 +29,7 @@ client library (three files). `clients/godot-csharp/example` a Godot project tha
 - `go vet ./...` and `go test -race ./...` (no network needed) and `go run honnef.co/go/tools/cmd/staticcheck@latest ./...`.
 - `gofmt -l .` must print nothing. `go mod tidy` must leave `go.mod`/`go.sum` unchanged. CI also runs `govulncheck` (on the
   latest Go patch release), a Docker build, and the Mongo store tests with `-tags mongo` against a MongoDB container.
-- Local server for development: `go run ./cmd/devserver -bucket game -versions 1.0.0,dev` (127.0.0.1:8099).
+- Local server for development: `go run ./cmd/devserver -bucket game` (127.0.0.1:8099).
 - Client library: `dotnet build clients/godot-csharp/P2PSignaling.csproj -c Release` (a type check only, see below).
 - Example project: `<godot> --headless --path clients/godot-csharp/example --build-solutions --quit`, then run it as described
   at the top of `example/MinimalSession.cs`. It needs `addons/webrtc_native` in the example project (git-ignored; copy it from
