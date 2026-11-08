@@ -230,6 +230,19 @@ server (for example `http://127.0.0.1:8099` for `cmd/devserver`) by editing one 
 environment variable `P2P_SIGNALING_URL`, else the file. With none of them, `Failed` fires with `no_server_url`. The file is
 read at connect time.
 
+### Who you are: the `name` file
+
+The player's name works like the server address. A game may set `lobby.PlayerName`; the library then saves it to
+`~/.p2p-signaling-server/name` (one line; `#` comments allowed) unless that file already exists, so a name the player chose is
+never overwritten by a game's default. A game that leaves `PlayerName` empty uses, in order, the environment variable
+`P2P_SIGNALING_NAME`, then that file; with neither, no name is sent. The name is cleaned (control characters dropped) and cut
+to 32 bytes, the server's own limit, so the client and server agree on what is shown.
+
+For a name the player **types** (a settings field), call `P2PIdentity.SavePlayerName(name)`: it replaces the file, so every game
+on the machine shows the new name. A game can read the current one with `P2PIdentity.PlayerName()` (null when none was ever
+chosen) to prefill its field, for example `P2PIdentity.PlayerName() ?? Environment.UserName`. Scripted runs that must not touch
+the shared file set `P2P_SIGNALING_HOME` (or pass the name only as `lobby.PlayerName` and never call `SavePlayerName`).
+
 ## 7. Decide what to replicate
 
 The library gives you a connected Godot multiplayer peer; what the game sends over it is yours. A pattern that worked

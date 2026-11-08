@@ -19,6 +19,7 @@ public sealed record FriendList(IReadOnlyList<Friend> Friends, IReadOnlyList<str
 /// ~/.p2p-signaling-server/id        this machine's id, created on first use
 /// ~/.p2p-signaling-server/friends   one friend's id per line; blank lines and # comments are ignored
 /// ~/.p2p-signaling-server/server    the server url, used when a game does not set one (see <see cref="ServerUrl"/>)
+/// ~/.p2p-signaling-server/name      the player's name, used when a game does not set one (see <see cref="PlayerName"/>)
 /// </code>
 /// A player gives their id to friends; a room hosted with <see cref="P2PLobby.ListForFriends"/> is then listed to everyone
 /// who has that id in their friends file (<see cref="P2PLobby.ListFriendRooms"/>). The id itself never goes to the
@@ -301,6 +302,106 @@ public static class P2PIdentity
         {
         }
     }
+
+    // ---- player name ----
+
+    /// <summary>The longest name the server keeps (it shortens anything over 32 bytes), so the client does the same.</summary>
+    public const int MaxNameBytes = 32;
+
+    /// <summary>
+    /// The name this machine remembers for the player, or null if none was ever chosen: environment variable
+    /// <c>P2P_SIGNALING_NAME</c>, else the first line of <c>~/.p2p-signaling-server/name</c>. Read again on every call, so
+    /// editing the file takes effect at once. <see cref="P2PLobby.PlayerName"/> overrides this. Shared by every game, so a
+    /// player picks a name once.
+    /// </summary>
+    public static string? PlayerName()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable("P2P_SIGNALING_NAME");
+        var cleanedEnv = CleanPlayerName(fromEnv ?? "");
+        if (cleanedEnv.Length > 0) return cleanedEnv;
+        try
+        {
+            var path = Path.Combine(HomeFolder, "name");
+            if (File.Exists(path))
+            {
+                var cleaned = CleanPlayerName(FirstLine(File.ReadAllLines(path)));
+                if (cleaned.Length > 0) return cleaned;
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            // an unreadable file just means nothing is remembered
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Saves <paramref name="name"/> as this machine's player name so other games can use it, unless a <c>name</c> file already
+    /// exists: a choice the player made is never overwritten by a game's default. Failures are ignored. To save a name the
+    /// player just typed, use <see cref="SavePlayerName"/>.
+    /// </summary>
+    public static void RememberPlayerName(string name)
+    {
+        try
+        {
+            var path = Path.Combine(HomeFolder, "name");
+            if (File.Exists(path)) return;
+            var cleaned = CleanPlayerName(name);
+            if (cleaned.Length == 0) return;
+            Directory.CreateDirectory(HomeFolder);
+            var temp = Path.Combine(HomeFolder, $"name.{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(temp, NameFileText(cleaned));
+            try { File.Move(temp, path, overwrite: false); }
+            catch (IOException) { File.Delete(temp); } // another game saved one first
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// The player's own choice: replaces the <c>name</c> file (every game that leaves <see cref="P2PLobby.PlayerName"/> empty
+    /// then uses it). Returns false if the name is empty after cleaning or the file could not be written.
+    /// </summary>
+    public static bool SavePlayerName(string name)
+    {
+        var cleaned = CleanPlayerName(name);
+        if (cleaned.Length == 0) return false;
+        try
+        {
+            Directory.CreateDirectory(HomeFolder);
+            var path = Path.Combine(HomeFolder, "name");
+            var temp = Path.Combine(HomeFolder, $"name.{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(temp, NameFileText(cleaned));
+            File.Move(temp, path, overwrite: true);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Trims a name, drops control characters and cuts it to <see cref="MaxNameBytes"/> bytes of UTF-8 (the server's limit).</summary>
+    public static string CleanPlayerName(string raw)
+    {
+        var sb = new System.Text.StringBuilder();
+        var bytes = 0;
+        foreach (var rune in raw.Trim().EnumerateRunes())
+        {
+            if (System.Text.Rune.IsControl(rune)) continue;
+            var size = rune.Utf8SequenceLength;
+            if (bytes + size > MaxNameBytes) break;
+            sb.Append(rune.ToString());
+            bytes += size;
+        }
+        return sb.ToString().Trim();
+    }
+
+    private static string NameFileText(string name) =>
+        "# The name games on this machine show for you when they do not set one themselves\n" +
+        "# (first line that is not a comment). Edit it to rename yourself everywhere.\n" +
+        name + "\n";
 
     // ---- friends ----
 

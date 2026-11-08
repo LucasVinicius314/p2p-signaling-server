@@ -27,6 +27,7 @@ public partial class P2PLobby : Node
     public string Bucket { get; set; } = "";
     public string GameVersion { get; set; } = "";
     /// <summary>Optional display name; the host sees it in <see cref="JoinRequest"/>.</summary>
+    /// <summary>Display name (the host sees it in <see cref="JoinRequest"/> and rooms list it). Empty uses the one remembered on this machine (<see cref="P2PIdentity.PlayerName"/>); a name set here is remembered for other games if none is saved yet.</summary>
     public string PlayerName { get; set; } = "";
     /// <summary>Requested room size for <see cref="CreateRoom"/>; 0 uses the bucket's maximum.</summary>
     public int MaxPlayers { get; set; }
@@ -186,6 +187,7 @@ public partial class P2PLobby : Node
     private void Connect()
     {
         if (!string.IsNullOrWhiteSpace(Url)) P2PIdentity.RememberServerUrl(Url);
+        if (!string.IsNullOrWhiteSpace(PlayerName)) P2PIdentity.RememberPlayerName(PlayerName);
         var url = string.IsNullOrWhiteSpace(Url) ? P2PIdentity.ServerUrl() ?? "" : Url;
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -204,6 +206,10 @@ public partial class P2PLobby : Node
         _helloSent = false;
         _phaseAge = 0;
     }
+
+    /// <summary>The name sent to the server: this lobby's <see cref="PlayerName"/>, else the one remembered on this machine, cleaned.</summary>
+    private string ResolvedName() =>
+        P2PIdentity.CleanPlayerName(string.IsNullOrWhiteSpace(PlayerName) ? P2PIdentity.PlayerName() ?? "" : PlayerName);
 
     private static string WsUrl(string url)
     {
@@ -236,7 +242,7 @@ public partial class P2PLobby : Node
                 {
                     _helloSent = true;
                     _phase = Phase.AwaitWelcome;
-                    ws.SendText(Outgoing.Hello(Bucket, GameVersion, PlayerName));
+                    ws.SendText(Outgoing.Hello(Bucket, GameVersion, ResolvedName()));
                 }
                 while (_ws != null && ws.GetAvailablePacketCount() > 0)
                     HandleText(Encoding.UTF8.GetString(ws.GetPacket()));

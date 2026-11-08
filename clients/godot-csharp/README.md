@@ -29,7 +29,7 @@ AddChild(lobby);
 | `Url` | server base address; `http(s)://` becomes `ws(s)://`. A url set here is saved to `~/.p2p-signaling-server/server` if none exists; empty uses `P2PIdentity.ServerUrl()` (`P2P_SIGNALING_URL`, else that file, else `Failed(no_server_url)`; see the guide's [server file](../../docs/integration-guide.md#which-server-the-server-file)) |
 | `Bucket` | the game's bucket id on the server |
 | `GameVersion` | informational; the server never rejects a version |
-| `PlayerName` | optional display name (the host sees it in `JoinRequest`) |
+| `PlayerName` | optional display name (the host sees it in `JoinRequest`, friends see it in room lists). Empty uses `P2PIdentity.PlayerName()` (`P2P_SIGNALING_NAME`, else `~/.p2p-signaling-server/name`); a name set here is saved there if none exists. When the player types a name, call `P2PIdentity.SavePlayerName(name)` so every game shows it (see the guide's [name file](../../docs/integration-guide.md#who-you-are-the-name-file)). Cut to 32 bytes, as the server does |
 | `MaxPlayers` | requested room size for `CreateRoom`; 0 uses the bucket's maximum |
 | `ConnectTimeoutSeconds` | how long a link may take to come up before `Failed` (default 20) |
 
