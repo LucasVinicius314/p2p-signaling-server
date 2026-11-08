@@ -26,7 +26,7 @@ AddChild(lobby);
 
 | Constructor argument / property | Meaning |
 |---|---|
-| `Url` | server base address; `http(s)://` becomes `ws(s)://` |
+| `Url` | server base address; `http(s)://` becomes `ws(s)://`. A url set here is saved to `~/.p2p-signaling-server/server` if none exists; empty uses `P2PIdentity.ServerUrl()` (`P2P_SIGNALING_URL`, else that file, else `Failed(no_server_url)`; see the guide's [server file](../../docs/integration-guide.md#which-server-the-server-file)) |
 | `Bucket` | the game's bucket id on the server |
 | `GameVersion` | informational; the server never rejects a version |
 | `PlayerName` | optional display name (the host sees it in `JoinRequest`) |

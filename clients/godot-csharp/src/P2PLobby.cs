@@ -22,7 +22,7 @@ public sealed record FriendRoom(string Code, string FriendLabel, string HostName
 /// </summary>
 public partial class P2PLobby : Node
 {
-    /// <summary>Server base URL, e.g. <c>https://p2p.example.com</c> (http/https become ws/wss).</summary>
+    /// <summary>Server base URL, e.g. <c>https://p2p.example.com</c> (http/https become ws/wss). Empty uses the one remembered on this machine (<see cref="P2PIdentity.ServerUrl"/>); a url set here is remembered for other games.</summary>
     public string Url { get; set; } = "";
     public string Bucket { get; set; } = "";
     public string GameVersion { get; set; } = "";
@@ -185,8 +185,15 @@ public partial class P2PLobby : Node
 
     private void Connect()
     {
+        if (!string.IsNullOrWhiteSpace(Url)) P2PIdentity.RememberServerUrl(Url);
+        var url = string.IsNullOrWhiteSpace(Url) ? P2PIdentity.ServerUrl() ?? "" : Url;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            Failed?.Invoke("no_server_url", "no server url: set P2PLobby.Url, or put one in ~/.p2p-signaling-server/server");
+            return;
+        }
         _ws = new WebSocketPeer();
-        var err = _ws.ConnectToUrl(WsUrl());
+        var err = _ws.ConnectToUrl(WsUrl(url));
         if (err != Error.Ok)
         {
             _ws = null;
@@ -198,9 +205,9 @@ public partial class P2PLobby : Node
         _phaseAge = 0;
     }
 
-    private string WsUrl()
+    private static string WsUrl(string url)
     {
-        var u = Url.TrimEnd('/');
+        var u = url.TrimEnd('/');
         if (u.StartsWith("https://")) u = "wss://" + u[8..];
         else if (u.StartsWith("http://")) u = "ws://" + u[7..];
         return u.EndsWith("/ws") ? u : u + "/ws";

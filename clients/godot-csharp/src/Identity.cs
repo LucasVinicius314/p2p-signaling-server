@@ -18,6 +18,7 @@ public sealed record FriendList(IReadOnlyList<Friend> Friends, IReadOnlyList<str
 /// <code>
 /// ~/.p2p-signaling-server/id        this machine's id, created on first use
 /// ~/.p2p-signaling-server/friends   one friend's id per line; blank lines and # comments are ignored
+/// ~/.p2p-signaling-server/server    the server url, used when a game does not set one (see <see cref="ServerUrl"/>)
 /// </code>
 /// A player gives their id to friends; a room hosted with <see cref="P2PLobby.ListForFriends"/> is then listed to everyone
 /// who has that id in their friends file (<see cref="P2PLobby.ListFriendRooms"/>). The id itself never goes to the
@@ -247,6 +248,57 @@ public static class P2PIdentity
             File.Delete(temp);
             if (TryParseId(FirstLine(File.ReadAllLines(path)), out var theirs)) return theirs;
             throw;
+        }
+    }
+
+    // ---- server url ----
+
+    /// <summary>
+    /// The signaling server this machine remembers, or null if none was ever chosen: environment variable
+    /// <c>P2P_SIGNALING_URL</c>, else the first line of <c>~/.p2p-signaling-server/server</c>. Read again on every call, so
+    /// editing the file takes effect at once. The library has no built-in address; <see cref="P2PLobby.Url"/> overrides this.
+    /// </summary>
+    public static string? ServerUrl()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable("P2P_SIGNALING_URL");
+        if (!string.IsNullOrWhiteSpace(fromEnv)) return fromEnv.Trim();
+        try
+        {
+            var path = Path.Combine(HomeFolder, "server");
+            if (File.Exists(path))
+            {
+                var line = FirstLine(File.ReadAllLines(path));
+                if (line.Length > 0) return line;
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            // an unreadable file just means nothing is remembered
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Saves <paramref name="url"/> as this machine's server so other games can use it, unless a <c>server</c> file already
+    /// exists: a choice the user made is never overwritten. Failures are ignored (a read-only home must not stop a game).
+    /// </summary>
+    public static void RememberServerUrl(string url)
+    {
+        try
+        {
+            var path = Path.Combine(HomeFolder, "server");
+            if (File.Exists(path)) return;
+            Directory.CreateDirectory(HomeFolder);
+            var temp = Path.Combine(HomeFolder, $"server.{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(temp,
+                "# The p2p-signaling server games on this machine use when they do not set one themselves\n" +
+                "# (first line that is not a comment). Saved by the first game that connected; edit it to switch servers.\n" +
+                url.Trim() + "\n");
+            try { File.Move(temp, path, overwrite: false); }
+            catch (IOException) { File.Delete(temp); } // another game saved one first
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
         }
     }
 

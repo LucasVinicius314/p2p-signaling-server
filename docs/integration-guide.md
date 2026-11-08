@@ -221,6 +221,15 @@ hash of it. The folder can be moved with the environment variable `P2P_SIGNALING
 machine). Details and limits are in [protocol.md](protocol.md#friends-listing-rooms-to-people-who-know-you). Working
 code: [`example/FriendsSession.cs`](../clients/godot-csharp/example/FriendsSession.cs).
 
+### Which server: the `server` file
+
+The library has no built-in address. The first time a game connects with `lobby.Url` set, the library saves it to
+`~/.p2p-signaling-server/server` (one line; `#` comments allowed) unless that file already exists, so a choice the user made
+is never overwritten. Later, any game that leaves `Url` empty uses it, so players and developers point every game at another
+server (for example `http://127.0.0.1:8099` for `cmd/devserver`) by editing one file. Order: `lobby.Url` if set, else the
+environment variable `P2P_SIGNALING_URL`, else the file. With none of them, `Failed` fires with `no_server_url`. The file is
+read at connect time.
+
 ## 7. Decide what to replicate
 
 The library gives you a connected Godot multiplayer peer; what the game sends over it is yours. A pattern that worked
@@ -300,6 +309,7 @@ message.
 | `Failed: signaling_closed` before linking | the server is unreachable, or restarted in the middle | retry |
 | `Failed: server_restarting` | the server is being redeployed | retry after `RetryAfterSeconds` |
 | `Failed: origin_rejected` (Web) | the page's origin is not in `allowed_origins` | add it |
+| `Failed: no_server_url` | `lobby.Url` is empty and neither `P2P_SIGNALING_URL` nor `~/.p2p-signaling-server/server` holds an address | set `Url` in the game, or write the address into that file |
 | `Failed: connect_failed` | the server address is malformed or unreachable | check the URL (`https://` becomes `wss://`) |
 | Engine error in `remove_peer` when a player leaves | an old library version | update the submodule (fixed) |
 | Everything builds twice, or duplicate-type errors | the submodule's own projects are being compiled | add `<Compile Remove="libs/**" />` (section 4) |
